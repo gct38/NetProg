@@ -1,11 +1,5 @@
 #include "lib/unp.h"
 
-//TODO: implement a way to read that the client closed the Socket
-//		will then need to gracefully close the server.
-//		perform Read or Recv action on client?
-
-/*TODO: seems like there's a bug where the server segfaults everytime there's
-		input from the server. */
 
 int main(int argc, char* argv[])
 {
@@ -46,14 +40,17 @@ int main(int argc, char* argv[])
 
 	//file = fopen(filename, "r");
 	//int chr = getc(file);
-	int chr = getchar();
-	while (chr != EOF or )
+	printf("enter char: ");
+	int chr = getchar();	//making sure user input is not EOF
+	while (chr != EOF)
 	{
 		putchar(chr);
-		scanf(chr, buffer);
-
+		scanf("%s",buffer);	//reading in from standard input
+		Send(connfd, buffer, strlen(buffer), 0);
+		printf("Just sent buffer %s to client\n", buffer);
+		chr = getchar();
 	}
-	Send(connfd, buffer, strlen(buffer), 0);
+	printf("exited while loop\n");
 	Close(connfd);
 	//Close(listenfd);
 	printf("Shutting down due to EOF\n");

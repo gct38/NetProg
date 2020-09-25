@@ -4,23 +4,14 @@
 //Want to test it more thoroughly
 
 int connections = 0;
+int userPort;
 
 void str_cli(FILE *fp, int sockfd)
 {
 	int inputEOF, maxfdp1, val;
 	fd_set rset;
 	char buffer[MAXLINE];
-	/*
-	while (Fgets(sendline, MAXLINE, fp) != NULL) {
 
-		Writen(sockfd, sendline, strlen(sendline));
-
-		if (Readline(sockfd, recvline, MAXLINE) == 0)
-			err_quit("str_cli: server terminated prematurely");
-
-		Fputs(recvline, stdout);
-	}
-	*/
 
 	printf("str_cli function, connections: %d\n", connections);
 	FD_ZERO(&rset);
@@ -33,7 +24,10 @@ void str_cli(FILE *fp, int sockfd)
 
 		FD_SET(sockfd, &rset);
 		maxfdp1 = max(fileno(fp), sockfd) + 1;
+		printf("entering select\n");
 		Select(maxfdp1, &rset, NULL, NULL, NULL);
+
+		printf("Got info from socket!!\n");
 
 		/* socket is readable */
 		if (FD_ISSET(sockfd, &rset))
@@ -51,9 +45,10 @@ void str_cli(FILE *fp, int sockfd)
 					exit(1);
 				}
 			}
+			printf("trying to write this stdout to socket.. buffer: %s\n", buffer);
 			Write(fileno(stdout), buffer, val);
 		}
-
+		printf("past the socket is readable portion\n");
 		/* input is readable */
 		if (FD_ISSET(fileno(fp), &rset))
 		{
@@ -64,15 +59,16 @@ void str_cli(FILE *fp, int sockfd)
 				FD_CLR(fileno(fp), &rset);
 				continue;
 			}
+			printf("trying to write to the socket.. buffer: %s\n", buffer);
 			Write(sockfd, buffer, val);
 		}
+		printf("printing..... %d %s\n", userPort, buffer);
 	}
 }
 
 
 int main(int argc, char* argv[])
 {
-	int userPort;
 	char loopback[] = "127.0.0.1";
 
 	int					sockfd;
@@ -83,7 +79,6 @@ int main(int argc, char* argv[])
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	//servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	while (1)
 	{
@@ -97,7 +92,7 @@ int main(int argc, char* argv[])
 			printf("connected to %s at port %d\n", loopback, userPort);
 		}
 		connections++;
-		//TODO: client function;
+		//client function;
 		str_cli(stdin, sockfd);		/* do it all */
 	}
 	exit(0);
