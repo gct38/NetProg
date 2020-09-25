@@ -1,5 +1,7 @@
 #include "lib/unp.h"
 
+/*TODO: not sure why you need multiple CNTRL+D
+		for the program to recognize you've reached the EOF */
 
 int main(int argc, char* argv[])
 {
@@ -38,17 +40,20 @@ int main(int argc, char* argv[])
 	connfd = Accept(listenfd, (SA *) NULL, NULL);
 	printf("Accepted Connection\n");
 
-	//file = fopen(filename, "r");
-	//int chr = getc(file);
 	printf("enter char: ");
-	int chr = getchar();	//making sure user input is not EOF
+	int chr = 0; //making sure user input is not EOF
 	while (chr != EOF)
 	{
+		chr = getchar();
 		putchar(chr);
-		scanf("%s",buffer);	//reading in from standard input
+		scanf("%s", buffer);	//reading in from standard input
+		memmove(buffer+1, buffer, strlen(buffer));
+		buffer[0] = chr;
+		buffer[strlen(buffer)] = '\0';
 		Send(connfd, buffer, strlen(buffer), 0);
 		printf("Just sent buffer %s to client\n", buffer);
-		chr = getchar();
+		memset(buffer, '\0', sizeof(char)*strlen(buffer));
+
 	}
 	printf("exited while loop\n");
 	Close(connfd);

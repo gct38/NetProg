@@ -1,7 +1,14 @@
 #include "lib/unp.h"
 
-//This should be fully implemented correctly.
-//Want to test it more thoroughly
+/* TODO: seems like there's an issue where there
+		 client is 1 behind from the server */
+
+/* TODO: need to implement something to prevent
+		 client from closing when server closes*/
+
+/* TODO: test and make sure that we can connect
+		 multiple servers simultaneously
+		 (don't actually think this is working..)*/
 
 int connections = 0;
 int userPort;
@@ -24,10 +31,10 @@ void str_cli(FILE *fp, int sockfd)
 
 		FD_SET(sockfd, &rset);
 		maxfdp1 = max(fileno(fp), sockfd) + 1;
-		printf("entering select\n");
+		//printf("entering select\n");
 		Select(maxfdp1, &rset, NULL, NULL, NULL);
 
-		printf("Got info from socket!!\n");
+		//printf("Got info from socket!!\n");
 
 		/* socket is readable */
 		if (FD_ISSET(sockfd, &rset))
@@ -45,10 +52,10 @@ void str_cli(FILE *fp, int sockfd)
 					exit(1);
 				}
 			}
-			printf("trying to write this stdout to socket.. buffer: %s\n", buffer);
+			//printf("trying to write this stdout to socket.. buffer: %s\n", buffer);
 			Write(fileno(stdout), buffer, val);
 		}
-		printf("past the socket is readable portion\n");
+		//printf("past the socket is readable portion\n");
 		/* input is readable */
 		if (FD_ISSET(fileno(fp), &rset))
 		{
@@ -59,9 +66,10 @@ void str_cli(FILE *fp, int sockfd)
 				FD_CLR(fileno(fp), &rset);
 				continue;
 			}
-			printf("trying to write to the socket.. buffer: %s\n", buffer);
+			//printf("trying to write to the socket.. buffer: %s\n", buffer);
 			Write(sockfd, buffer, val);
 		}
+		buffer[strlen(buffer)-1] = '\0';
 		printf("printing..... %d %s\n", userPort, buffer);
 	}
 }
