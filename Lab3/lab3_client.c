@@ -39,9 +39,9 @@ void str_cli(FILE *fp, int sockfd)
 		/* socket is readable */
 		if (FD_ISSET(sockfd, &rset))
 		{
-			if (val = Readline(sockfd, buffer, MAXLINE) == 0)
+			if ((val = Read(sockfd, buffer, MAXLINE)) == 0)
 			{
-				if (feof(&sockfd))
+				if (feof(fp))
 				{
 					return;
 				}
@@ -49,17 +49,19 @@ void str_cli(FILE *fp, int sockfd)
 				{
 					connections--;
 					printf("Premature Client Termination\n");
-					exit(1);
+					FD_CLR(fileno(fp), &rset);
+					return;
 				}
 			}
 			//printf("trying to write this stdout to socket.. buffer: %s\n", buffer);
+			buffer[val] = 0; 
 			Write(fileno(stdout), buffer, val);
 		}
 		//printf("past the socket is readable portion\n");
 		/* input is readable */
 		if (FD_ISSET(fileno(fp), &rset))
 		{
-			if (val = Read(fileno(fp), buffer, MAXLINE) == 0)
+			if ((val = Read(fileno(fp), buffer, MAXLINE)) == 0)
 			{
 				inputEOF = 1;
 				Shutdown(sockfd, SHUT_WR);
@@ -69,7 +71,7 @@ void str_cli(FILE *fp, int sockfd)
 			//printf("trying to write to the socket.. buffer: %s\n", buffer);
 			Write(sockfd, buffer, val);
 		}
-		buffer[strlen(buffer)-1] = '\0';
+		buffer[val] = '\0';
 		printf("printing..... %d %s\n", userPort, buffer);
 	}
 }
