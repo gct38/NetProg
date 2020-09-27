@@ -1,109 +1,97 @@
-#include "lib/unp.h"
+#include "../lib/unp.h"
 
-/* TODO: seems like there's an issue where there
-		 client is 1 behind from the server */
-
-/* TODO: need to implement something to prevent
-		 client from closing when server closes*/
-
-/* TODO: test and make sure that we can connect
-		 multiple servers simultaneously
-		 (don't actually think this is working..)*/
-
-int connections = 0;
-int userPort;
-
-void str_cli(FILE *fp, int sockfd)
+int handle_connection(int sockfd, struct sockaddr_in servaddr)
 {
-	int inputEOF, maxfdp1, val;
-	fd_set rset;
+	int val;
 	char buffer[MAXLINE];
 
-
-	printf("str_cli function, connections: %d\n", connections);
-	FD_ZERO(&rset);
-	for ( ; ; )
-	{
-		if (!inputEOF)
-		{
-			FD_SET(fileno(fp), &rset);
-		}
-
-		FD_SET(sockfd, &rset);
-		maxfdp1 = max(fileno(fp), sockfd) + 1;
-		//printf("entering select\n");
-		Select(maxfdp1, &rset, NULL, NULL, NULL);
-
-		//printf("Got info from socket!!\n");
-
-		/* socket is readable */
-		if (FD_ISSET(sockfd, &rset))
-		{
-			if ((val = Read(sockfd, buffer, MAXLINE)) == 0)
-			{
-				if (feof(fp))
-				{
-					return;
-				}
-				else
-				{
-					connections--;
-					printf("Premature Client Termination\n");
-					FD_CLR(fileno(fp), &rset);
-					return;
-				}
-			}
-			//printf("trying to write this stdout to socket.. buffer: %s\n", buffer);
-			buffer[val] = 0; 
-			Write(fileno(stdout), buffer, val);
-		}
-		//printf("past the socket is readable portion\n");
-		/* input is readable */
-		if (FD_ISSET(fileno(fp), &rset))
-		{
-			if ((val = Read(fileno(fp), buffer, MAXLINE)) == 0)
-			{
-				inputEOF = 1;
-				Shutdown(sockfd, SHUT_WR);
-				FD_CLR(fileno(fp), &rset);
-				continue;
-			}
-			//printf("trying to write to the socket.. buffer: %s\n", buffer);
-			Write(sockfd, buffer, val);
-		}
-		buffer[val] = '\0';
-		printf("printing..... %d %s\n", userPort, buffer);
+	if ((val = read(sockfd, buffer, MAXLINE)) == 0) {
+		printf(">Server on %d closed.\n", ntohs(servaddr.sin_port));
+		return 1;
 	}
+	buffer[val] = 0; 
+	printf(">%d %s", ntohs(servaddr.sin_port), buffer);
+	fflush(stdout);
+	return 0;
+
 }
 
 
 int main(int argc, char* argv[])
 {
+	//printf("start\n");
 	char loopback[] = "127.0.0.1";
 
-	int					sockfd;
-	struct sockaddr_in	servaddr;
+	int					sockets[5];
+	struct sockaddr_in	servaddr[5];
 
+	fd_set connections;
 
-	sockfd = Socket(AF_INET, SOCK_STREAM, 0);
-
-	bzero(&servaddr, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
+	//printf("building fdset\n");
+	int max_fd = fileno(stdin);
+	int i;
+	for (i = 0; i < 5; i++) {
+		sockets[i] = socket(AF_INET, SOCK_STREAM, 0);
+		max_fd = max(max_fd, sockets[i]);
+		bzero(servaddr + i, sizeof(struct sockaddr_in));
+		servaddr[i].sin_family = AF_INET;
+	}
 
 	while (1)
-	{
-		if (connections < 5)
-		{
-			scanf("%d", &userPort);
-			printf("given port %d\n", userPort);
-			servaddr.sin_port = htons(userPort);
-			Inet_pton(AF_INET, loopback, &servaddr.sin_addr);
-			Connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
-			printf("connected to %s at port %d\n", loopback, userPort);
+	{	
+		//printf("Ready for connections\n");
+		// set the fds to check for 
+		FD_ZERO(&connections);
+		FD_SET(fileno(stdin), &connections);
+		for (i = 0; i < 5; i++) {
+			if (servaddr[i].sin_port > 0) {
+				FD_SET(sockets[i], &connections);
+			}
 		}
-		connections++;
-		//client function;
-		str_cli(stdin, sockfd);		/* do it all */
+
+		// select
+		int rv = select(max_fd + 1, &connections, NULL, NULL, NULL);
+		//printf("%d fd(s) ready\n", rv);
+
+		//client function
+		for (i = 0; i < 5; i++) {
+			if (FD_ISSET(sockets[i], &connections)) {
+				int closed = handle_connection(sockets[i], servaddr[i]);
+				if (closed) {
+					// close this socket and reopen for another connection
+					shutdown(sockets[i], SHUT_RDWR);
+					close(sockets[i]);
+					FD_CLR(sockets[i], &connections);
+					sockets[i] = socket(AF_INET, SOCK_STREAM, 0);
+					max_fd = max(max_fd, sockets[i]);
+					bzero(servaddr + i, sizeof(struct sockaddr_in));
+					servaddr[i].sin_family = AF_INET;
+				}
+			}
+		}
+
+		// read user input
+		if (FD_ISSET(fileno(stdin), &connections)) {
+			//printf("stdin readable\n");
+			char buffer[10];
+			int bytes = read(fileno(stdin), buffer, 10);
+			buffer[bytes] = 0;
+			int port = atoi(buffer);
+			// find an available socket
+			for (i = 0; i < 5; i++) {
+				if (servaddr[i].sin_port == 0) {
+					//printf("given port %d\n", port);
+					servaddr[i].sin_port = htons(port);
+					inet_pton(AF_INET, loopback, &(servaddr[i].sin_addr));
+					if (connect(sockets[i], (struct sockaddr *) servaddr + i, sizeof(*(servaddr + i))) != 0) {
+						//printf(">Failed to connect to port %d. Error: %s.\n", port, strerror(errno));
+					}
+					break;
+				}
+			}
+		}
+
+		
 	}
 	exit(0);
 }

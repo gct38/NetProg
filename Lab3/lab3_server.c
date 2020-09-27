@@ -1,4 +1,4 @@
-#include "lib/unp.h"
+#include "../lib/unp.h"
 
 /*TODO: not sure why you need multiple CNTRL+D
 		for the program to recognize you've reached the EOF */
@@ -18,7 +18,6 @@ int main(int argc, char* argv[])
 	}
 	//init port number
 	int port = 9877+atoi(argv[1]);
-	printf("port number %d\n", port);
 
 	FILE* file;
 	char* filename;
@@ -28,36 +27,57 @@ int main(int argc, char* argv[])
 
 
 	//initializing socket
-	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family      = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port        = htons(port);
 
-	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
-	Listen(listenfd, LISTENQ);
-	connfd = Accept(listenfd, (SA *) NULL, NULL);
-	printf("Accepted Connection\n");
+	bind(listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
-	printf("enter char: ");
-	int chr = 0; //making sure user input is not EOF
-	while (chr != EOF)
-	{
-		chr = getchar();
-		putchar(chr);
-		scanf("%s", buffer);	//reading in from standard input
-		memmove(buffer+1, buffer, strlen(buffer));
-		buffer[0] = chr;
-		buffer[strlen(buffer)] = '\0';
-		Send(connfd, buffer, strlen(buffer), 0);
-		printf("Just sent buffer %s to client\n", buffer);
-		memset(buffer, '\0', sizeof(char)*strlen(buffer));
+	//look for a connection
+	while(1) {
+		listen(listenfd, LISTENQ);
+		connfd = accept(listenfd, (struct sockaddr *) NULL, NULL);
+		printf(">Accepted connection\n");
 
+		//we need to check for input from stdin and check if the client has closed the connection
+		//select is the solution
+		while(1) {
+			fd_set fds;
+			FD_ZERO(&fds);
+			FD_SET(fileno(stdin), &fds);
+			FD_SET(connfd, &fds);
+			int max_fd = max(fileno(stdin), connfd);
+
+			select(max_fd + 1, &fds, 0, 0, 0);
+
+			// client is readable -- this should only happen if the connection has closed
+			if (FD_ISSET(connfd, &fds)) {
+				printf(">str_cli: client disconnected\n");
+				close(connfd);
+				FD_CLR(connfd, &fds);
+				// get rid of anything in the input stream as well (consume it without using it)
+				if (FD_ISSET(fileno(stdin), &fds)) {
+					read(fileno(stdin), buffer, MAXLINE);
+				}
+				break;
+			}
+
+			// stdin is readable -- we have a line to send to the client
+			if (FD_ISSET(fileno(stdin), &fds)) {
+				int val = read(fileno(stdin), buffer, MAXLINE);
+				if (val == 0) {
+					//EOF
+					printf(">Shutting down due to EOF\n");
+					close(connfd);
+					exit(0);
+				} else {
+					buffer[val] = 0;
+					send(connfd, buffer, val, 0);
+				}
+			}
+		}
 	}
-	printf("exited while loop\n");
-	Close(connfd);
-	//Close(listenfd);
-	printf("Shutting down due to EOF\n");
-
 }
