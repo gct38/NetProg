@@ -1,68 +1,63 @@
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 
-/* TODO: seems like the adding isn't correct */
+struct values {
+    int val1;
+    int val2;
+};
 
-int MAX_ADDAND;
-
-//struct for 2 values to be added
-struct pair {
-	long x;
-	long y;
-} pair;
-
-
-void * add(void * v) {
-	struct pair *values = malloc(sizeof(pair));
-	values = (struct pair*) v;
-	printf("Thread %lu running add() with [%lu + %lu]\n", pthread_self(), values->x, values->y);
-	if (values->y) {
-			values->y--;
-			return (void*)(1+add((void*)values));
-	}
-	else {
-		return (void*)values->x;
-	}
+void* add(void* inp) {
+    struct values * temp = inp;    
+    if (temp->val2) {
+        temp->val2--;
+        return (void*)(1+add((void*)temp));
+    } else {              
+        long ret = temp->val1;           
+        free(temp);
+        return (void*)ret;
+    } 
 }
 
-
 int main(int argc, char* argv[]) {
-	if (argc != 2) {
-		printf("Need to input the proper arguments: [MAX_ADDAND]\n");
-		exit(1);
-	}
-	MAX_ADDAND = atoi(argv[1]);
-	int NUM_CHILD = (MAX_ADDAND-1) * MAX_ADDAND;
+    
+    if (argc != 2) {
+        fprintf(stderr, "Incorrect number of arguements\n");
+        return 1;
+    }
 
-	pthread_t children[NUM_CHILD];
-	printf("num children %d\n\n", NUM_CHILD);
+    int MAX_ADDAND = atoi(argv[1]);
+    pthread_t children[MAX_ADDAND*MAX_ADDAND-1];
+    
+    int j;
+    int i;
+    int index = 0;
+    for (i = 1; i < MAX_ADDAND; ++i) {
+        for (j = 1; j <= MAX_ADDAND; ++j) {
+            printf("Main starting thread add() with [%d + %d]\n", i, j);
+            pthread_t tid;
+            struct values* temp = malloc(sizeof(struct values));
+            temp->val1 = i;
+            temp->val2 = j;
+            int val = pthread_create(&tid, NULL, add, (void*)temp);
+            if (val < 0) {
+                fprintf(stderr, "pthread_create() failed!\n");
+                return -1;
+            } else { 
+                printf("Thread %ld running add() with [%d + %d]\n", tid, i, j);                 
+                children[index++] = tid;}
+        }
+    }
+    int secondaryIndex = 0;
+    for (i = 1; i < MAX_ADDAND; ++i) {
+        for (j = 1; j <= MAX_ADDAND; ++j) {
+            long* ret_val;
+            pthread_join(children[secondaryIndex],(void**)&ret_val);
+            printf("In main, collecting thread %lu computed [%d + %d] = %ld\n", children[secondaryIndex++],i,j, (long)ret_val);
+        }
+    }
 
-	for (long i=0; i<MAX_ADDAND-1; i++) {
-		for (long j=0; j<MAX_ADDAND; j++) {
-			struct pair adders = { i+1,j+1 };	//two values to add recursively
-			struct pair* addersPtr = &adders;
-
-			pthread_t tid;
-			int val = pthread_create(&tid, NULL, add, (void*)addersPtr);
-
-			if (val < 0) return -1;
-			else children[(i*MAX_ADDAND)+j] = tid;
-			printf("Main starting thread %lu add() for [%lu + %lu]\n", tid, i+1, j+1);
-
-
-		}
-	}
-
-	//retreiving result from threads
-	for (long i=0; i<NUM_CHILD; i++) {
-		long *ret_val;
-		pthread_join(children[i], (void**)&ret_val);
-		printf("In main, collecting thread %lu computed [x + y] = %lu\n\n", children[i], (long)ret_val);
-	}
-
-
-
-	return 0;
+    return 0;
 }
