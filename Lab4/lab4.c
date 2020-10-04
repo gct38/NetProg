@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+/* TODO: seems like the adding isn't correct */
 
 int MAX_ADDAND;
 
@@ -22,7 +23,7 @@ void * add(void * v) {
 			return (void*)(1+add((void*)values));
 	}
 	else {
-		return (void*)values->x--;
+		return (void*)values->x;
 	}
 }
 
