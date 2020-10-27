@@ -81,15 +81,13 @@ void disconnectAll() {
 void guessedWord(char user[]) {
    int i;
    for (i = 0; i < connected; ++i) {
-      char msg[1024];
-      sprintf(msg, "%s has correctly guessed the word %s\n", user, secret_word);
-      printf("%s",msg);
-      write(clients[i]->descriptor, msg, strlen(msg));
+		if (clients[i]->playing) {
+			char msg[1024];
+			sprintf(msg, "%s has correctly guessed the word %s\n", user, secret_word);
+			printf("%s",msg);
+			write(clients[i]->descriptor, msg, strlen(msg));
+		}
    }
-}
-
-void globalMessage(struct client * client, char guess[]) {
-   
 }
 
 int handleGuess(char guess_word[], struct client * client) {
@@ -109,7 +107,6 @@ int handleGuess(char guess_word[], struct client * client) {
          correctPlace++;
       }
       for (j = 0; j < swlen; ++j) {
-         printf("%d ", consumed[j]);
          if ( tolower(secret_word[i]) == tolower(guess_word[j]) && !consumed[j] ) {
             correctLetter++;
             consumed[j] = 1;
@@ -122,7 +119,9 @@ int handleGuess(char guess_word[], struct client * client) {
    sprintf(msg, "%s guessed %s: %d letter(s) were correct and %d letter(s) were correctly placed.\n", client->userName, guess_word, correctLetter, correctPlace);
    printf("%s",msg);
    for (i = 0; i < connected; ++i) {
-      write(clients[i]->descriptor, msg, strlen(msg));   
+		if (clients[i]->playing) {
+      write(clients[i]->descriptor, msg, strlen(msg));
+		}
    }
 
    return 0;
@@ -208,7 +207,7 @@ int main(int argc, char* argv[]) {
 				char msg[4096];
 				int len;
 				if ( !(len = read(cd,&buf,1024)) ){
-					printf("User %s disconnected\n", clients[i]->userName);
+					printf("User %s disconnected\n", clients[i--]->userName);
                close(cd);
                FD_CLR(cd,&fds);
                removeUser(cd);
@@ -227,7 +226,7 @@ int main(int argc, char* argv[]) {
                   sendNumUsers(cd);
 					} else {
                   sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
-						write(cd, msg, len+62);
+						write(cd, msg, strlen(msg));
 					}										
 				} else {
                if (len != swlen) {
@@ -244,14 +243,11 @@ int main(int argc, char* argv[]) {
                      swlen = strlen(secret_word);
                      printf("Secret word is %s\n", secret_word);
                   }
-
-               }
-               
+               }               
             }
 			}		
 		}
-	}
-	
+	}	
 	
 	freeDict(dict,dictionary_size);
 	freeClients();
