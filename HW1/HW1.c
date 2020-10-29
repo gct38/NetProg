@@ -6,15 +6,20 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <signal.h> 
+#include <signal.h>
 
-
+//Global Variable Declaration
 char buffer[1024];
 int alarms; // number of times SIGALRM has been received since last packet
 int conn_fd;
 int conn_msglen;
 struct sockaddr_in client;
 
+/*
+Alarm Handler
+Every alarm, we resend the last packet
+If 10 seconds, then there's a timeout and we kill the process
+*/
 void handler(int sig) {
 	alarms++;
 	// if it's been ten seconds, kill the process
@@ -38,6 +43,10 @@ enum OpCodes {
 	ERROR
 };
 
+/*
+Creates ACK packet
+Populates ACK opcode (2 bytes) and the block number (2 bytes)
+*/
 int CreateACKPacket(int block_number){
     printf("sending ACK %d\n", block_number);
 	buffer[0] = 0;
@@ -47,6 +56,10 @@ int CreateACKPacket(int block_number){
 	return 4;
 }
 
+/*
+Creates ERROR packet
+Populates ERROR opcode (2 bytes), error code (2 bytes), then error message(str), then a 0 at the end (1 byte)
+*/
 int CreateErrorPacket(int error_code, char* error_msg, int msg_len){
     printf("sending ERROR %d\n", error_code);
 	buffer[0] = 0;
@@ -61,6 +74,13 @@ int CreateErrorPacket(int error_code, char* error_msg, int msg_len){
 	return msg_len + 5;
 }
 
+
+/*
+Creates DATA packet
+Populates DATA opcode (2 bytes), block number (2 bytes), followed by the data (n bytes)
+If the data is too long, it will split itself.
+We know we're at the end of the data when the data is less than 512
+*/
 int CreateDataPacket(FILE* f_ptr, int block_number){
     printf("sending DATA\n");
 	buffer[0] = 0;
@@ -76,6 +96,14 @@ int CreateDataPacket(FILE* f_ptr, int block_number){
 	return bytes_read + 4;
 }
 
+
+/*
+This is where the main logic of our code is
+It handles each individual TID.
+Once we receive a packet from the client, we parse through the client's OpCode
+	to and from there we have switch statement to handle the appropriate action
+	to send a packet back to the client
+*/
 void HandleConnection(int server_port) {
 
 	FILE* fptr;
@@ -109,7 +137,7 @@ void HandleConnection(int server_port) {
     printf("initial opcode %d\n", opcode);
     switch(opcode) {
     	case RRQ:
-    	
+
         rwmode = 0;
 
     	fptr = fopen(buffer + 2, "rb"); // opens specified file, if it exists
@@ -175,15 +203,20 @@ void HandleConnection(int server_port) {
                     break;
                 }
                 // get blocknum from packet
-                block = (clientbuf[2] << 8)|clientbuf[3];
-                // write to fptr
-                fwrite(clientbuf+4, sizeof(char), bytes_recv - 4, fptr);
-                // CreateAckPacket
-                conn_msglen = CreateACKPacket(block);
-                // if we got less than 512 bytes of data, this is the last packet.
-                if (bytes_recv - 4 < 512) {
-                    fclose(fptr);
-                    rwmode = -1;
+                int data_block = (clientbuf[2] << 8)|clientbuf[3];
+                if(data_block > block){
+                	block = data_block;
+                	// write to fptr
+                	fwrite(clientbuf+4, sizeof(char), bytes_recv - 4, fptr);
+                	// CreateAckPacket
+                	conn_msglen = CreateACKPacket(block);
+                	// if we got less than 512 bytes of data, this is the last packet.
+                	if (bytes_recv - 4 < 512) {
+                    	fclose(fptr);
+                    	rwmode = -1;
+                	}
+                } else {
+                	conn_msglen =CreateErrorPacket(5, "", 0);
                 }
                 break;
             case ACK:
@@ -215,8 +248,11 @@ void HandleConnection(int server_port) {
 
 }
 
+
+//MAIN
 int main(int argc, char* argv[]) {
 
+	//Error checking the arguments
     if (argc > 3) {
         printf("Too many arguments\n");
         return EXIT_FAILURE;
@@ -225,13 +261,14 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    // register the sugnal handler
+    // register the signal handler
     signal(SIGALRM, handler);
 
     int startPort = atoi(argv[1]);
     int currentPort = startPort;
     int endPort = atoi(argv[2]);
 
+	//error checking the ports given
     if (startPort < 0 || endPort < 0) {
     	printf("Ports cannot have negative values\n");
     	return EXIT_FAILURE;
@@ -241,6 +278,7 @@ int main(int argc, char* argv[]) {
     }
 
 
+	//initialization of the server
     int udp = socket(AF_INET, SOCK_DGRAM, 0);
 
     if (udp < 0) {
@@ -262,7 +300,9 @@ int main(int argc, char* argv[]) {
     }
 
     alarms = 0;
-    
+	//while loop to go thru and handle any TIDs
+	//	will fork and create new child processes
+	//	to handle any TFTP action
     while(currentPort <= endPort) {
 
         if (currentPort == 69) {
@@ -270,7 +310,7 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        int msgLen = recvfrom(udp,buffer,1024,0,(struct sockaddr*)&client,&sz); 
+        int msgLen = recvfrom(udp,buffer,1024,0,(struct sockaddr*)&client,&sz);
         buffer[msgLen] = '\0';
         printf("received message from client\n");
         currentPort++;
@@ -287,8 +327,8 @@ int main(int argc, char* argv[]) {
 
             HandleConnection(currentPort);
 
-        }            
-    }     
+        }
+    }
 
     close(udp);
     return EXIT_SUCCESS;
