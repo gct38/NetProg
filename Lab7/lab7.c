@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
 
    ;
    if ( (s = getaddrinfo(argv[1], NULL, &hints, &result)) != 0 ) {
-      puts("getaddrinfo() failed!");
+      perror("getaddrinfo() failed!");
       fprintf(stderr, "Interpreting return status code: %s\n", gai_strerror(s));
       exit(EXIT_FAILURE);
    }
