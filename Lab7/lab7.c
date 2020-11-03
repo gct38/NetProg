@@ -29,8 +29,7 @@ int main(int argc, char* argv[]) {
    hints.ai_family = AF_UNSPEC;
    hints.ai_socktype = SOCK_STREAM;
    hints.ai_flags = AI_PASSIVE;
-
-   ;
+   
    if ( (s = getaddrinfo(argv[1], NULL, &hints, &result)) != 0 ) {
       perror("getaddrinfo() failed!");
       fprintf(stderr, "Interpreting return status code: %s\n", gai_strerror(s));
