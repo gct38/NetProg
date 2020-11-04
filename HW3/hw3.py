@@ -6,8 +6,6 @@ from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
 import sys  # For sys.argv, sys.exit()
 import socket  # for gethostbyname()
-import collections
-import math
 import grpc
 
 import csci4220_hw3_pb2
