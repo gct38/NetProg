@@ -4,23 +4,102 @@ from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
 import sys  # For sys.argv, sys.exit()
 import socket  # for gethostbyname()
-
+import collections
+import math
 import grpc
 
 import csci4220_hw3_pb2
 import csci4220_hw3_pb2_grpc
 
+#TODO: implement container for k-buckets
+
+#Server Implementation
 class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
-	def __init__(self):
-		pass
+	def __init__(self, local_id, port, k):
+		self.id = local_id
+		self.port = port
+		self.k = k
+		self.kbuckets = collections.Counter(list)
+		self.stored_values = {}
 
-	def FindNode(self, IDKey, context):
-		pass
+	#return NodeList of k closest nodes to given ID
+	def FindNode(self, Key):
+		idkey = Key.node.id
+		closest = []
+		for b in range(0,3):
+			closest.extend(self.kbuckets[b])
 
-	def FindValue(self, request, context):
+		closest = sorted(closest, key=lambda x : self.__distance(idkey, x.id))
+
+		if len(closest) > 4:
+			closest = closest[:4]
+
+		return csci4220_hw3_pb2.NodeList(responding_node=responder, nodes=closest)
+		
+		
+	#returns KV_Node_Wrapper
+	def FindValue(self, Key):
+		idkey = Key.idkey
+
+		if idkey in self.stored_values:
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=responder, mode_kv = True, kv = self.stored_values[idkey], nodes = [])
+
+		closest = []
+		for b in range(0,3):
+			closest.extend(self.kbuckets[b])
+
+		closest = sorted(closest, key=lambda x : self.__distance(idkey, x.id))
+		
+		if len(closest) > 4:
+			closest = closest[:4]
+
+		return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=responder, mode_kv = False, kv = -1, nodes = closest)
+
+	#Stores KeyValue at node w/ ID closest to Key
+	def Store(self, KeyValue, context):
 		pass
+		
+
+	#quit current node, removes all nodes from current node's kbucket
 	def Quit(self, request, context):
 		pass
+
+
+
+	#finds distance using XOR between 2 IDs
+	def __distance(self, id1, id2=self.id):
+		return id1 ^ id2
+
+
+	
+
+
+#Client Implementation
+def bootstrap(stub, host, port):
+	pass
+
+def find_node(stub, IDKey):
+	print('Serving FindNode(<targetID>) request for <requesterID>')
+	print('Before FIND_NODE command, k-buckets are:')
+	#PRINT K BUCKETS
+	#implement pseudocode from PDF
+	print('After FIND_NODE command, k-buckets are:')
+	#PRINT K BUCKETS
+
+
+def find_value(stub, key):
+	pass
+
+#store key:value as KeyValue
+#	stores to closest node id by key
+def store(stub, key, value):
+	pass
+
+#quit current node, removes all nodes from current node's kbucket
+def quit(stub):
+	pass
+
+
 
 def run():
 	if len(sys.argv) != 4:
