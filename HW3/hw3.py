@@ -10,17 +10,24 @@ import grpc
 import csci4220_hw3_pb2
 import csci4220_hw3_pb2_grpc
 
+#Finds distance using XOR between 2 IDs
+def distance(id1, id2):
+	return id1 ^ id2
 
+def print_k_buckets(k_buckets):
+	for i in range(len(k_buckets)):
+		print("%d: " % i)
+		for j in range(len(k_buckets[i])):
+			current = k_buckets[i]
+			print("%d : %d" % (current[j].id, current[j].port))
+			if (j == len(i)-1):
+				print()
+			else:
+				print(" ")
+			
 
 #Server Implementation
 class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
-	def __init__(self, local_id, port, address, k):
-		self.id = int(local_id)
-		self.port = int(port)
-		self.address = str(address)
-		self.k = int(k)
-		self.bucket = [[]]*4 	#initializing kbucket to list of 0's with length k
-		self.hashtable = dict() #key=key from KeyValue, value=KeyValue 
 
 	#return NodeList of k closest nodes to given ID
 	def FindNode(self, IDKey, context):
@@ -47,7 +54,7 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 						break
 				del distances[to_remove]
 		'''
-		#creating NodeList from distances dict
+		#Creating NodeList from distances dict
 		#TODO: implement NodeList, don't think nodes parameter is right
 		return csci4220_hw3_pb2.NodeList(responding_node=responder, nodes=list(distances.values()))
 		
@@ -66,13 +73,9 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 																 address=self.address), 
 									  idkey=KeyValue.key)
 
-	#quit current node, removes all nodes from current node's kbucket
+	#Quit current node, removes all nodes from current node's kbucket
 	def Quit(self, request, context):
 		pass
-
-	#finds distance using XOR between 2 IDs
-	def __distance(self, id1, id2=self.id):
-		return id1 ^ id2	
 
 	#updating kbuckets so that requester's id is most recent 
 	def __update_kbuckets(self, id):
@@ -91,8 +94,11 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 
 
 #Client Implementation
-def bootstrap(stub, host, port):
-	pass
+def bootstrap(hostname, port, local_node):
+	with grpc.insecure_channel('localhost:' + port) as channel:
+		stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+		stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=local_node.id))
+		
 
 def find_node(stub, IDKey):
 	print('Serving FindNode(<targetID>) request for <requesterID>')
@@ -101,7 +107,6 @@ def find_node(stub, IDKey):
 	#implement pseudocode from PDF
 	print('After FIND_NODE command, k-buckets are:')
 	#PRINT K BUCKETS
-
 
 def find_value(stub, key):
 	pass
@@ -119,7 +124,7 @@ def store(stub, key, value):
 
 #quit current node, removes all nodes from current node's kbucket
 def Quit(stub):
-	
+	pass
 
 def run():
 	if len(sys.argv) != 4:
@@ -137,7 +142,22 @@ def run():
 		KadImplServicer(), server)
 	server.add_insecure_port('[::]:' + my_port)
 	server.start()
-	server.wait_for_termination()
+
+	kbuckets = [[]] * 4
+
+	local_node = csci4220_hw3_pb2.Node(id=local_id,port=my_port,address=my_address)
+
+	while(1):
+		inp = input().lower().split()
+		print(inp)		
+		if (inp[0] == "quit"):
+			print("Exited")
+			sys.exit(0)
+		elif (inp[0] == "boostrap"):
+			buckets = bootstrap(inp[1], inp[2], local_node)	
+		elif (inp[0] == "find_node"):
+			print("Before FIND_NODE command, k-buckets are:")
+
 
 	''' Use the following code to convert a hostname to an IP and start a channel
 	Note that every stub needs a channel attached to it
@@ -149,6 +169,6 @@ def run():
 	#remote_port = int(remote_port_string)
 	#channel = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
 
-	if __name__ == '__main__':
-		run()
+if __name__ == '__main__':
+	run()
 		
