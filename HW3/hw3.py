@@ -6,7 +6,8 @@ from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
 import sys  # For sys.argv, sys.exit()
 import socket  # for gethostbyname()
-
+import collections
+import math
 import grpc
 
 import csci4220_hw3_pb2
@@ -187,14 +188,14 @@ def run():
 			Quit()
 			print("Shutdown node %d" % local_id)
 			sys.exit(0)
-		elif inp[0] == "BOOTSTRAP":
+		elif inp[0] == "BOOTSTRAP" and (len(inp) == 3):
 			Bootstrap(inp[1], inp[2])
-		elif inp[0] == "FIND_NODE":
+		elif inp[0] == "FIND_NODE" and (len(inp) == 3):
 			print("Before FIND_NODE command, k-buckets are:")
 			print_k_buckets()
-		elif inp[0] == "FIND_VALUE":
+		elif inp[0] == "FIND_VALUE" and (len(inp) == 3):
 			Find_Value(int(inp[1]))
-		elif inp[0] == "STORE":
+		elif inp[0] == "STORE" and (len(inp) == 3):
 			Store(int(inp[1]), inp[2])
 		else:
 			print("Invalid arguement!")
