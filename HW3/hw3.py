@@ -60,15 +60,13 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 			closest += k_buckets[i]
 		closest = sorted(closest, key=lambda x : id ^ x.id)[:self.k]
 
-		if (IDKey.node.id == id):
-			closest += [self.node]
-
 		AddorUpdateNode(IDKey.node, self.node, self.k)
 		return csci4220_hw3_pb2.NodeList(responding_node=self.node, nodes=closest)		
 		
 	#returns KV_Node_Wrapper
 	def FindValue(self, IDKey, context):	
-		key = IDKey.idkey	
+		key = IDKey.idkey
+		AddorUpdateNode(IDKey.node, self.node, self.k)	
 		print("Serving FindKey(%d) request for %d" % (IDKey.idkey, IDKey.node.id))
 		if key in hash_table.keys():
 			value = csci4220_hw3_pb2.KeyValue(key=key, value=hash_table[key])
@@ -99,7 +97,8 @@ def Bootstrap(hostname, port, local_node, k):
 		stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
 		ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=local_node.id))		
 		for i in ret.nodes:
-			AddorUpdateNode(i, local_node, k)		
+			AddorUpdateNode(i, local_node, k)
+		AddorUpdateNode(ret.responding_node, local_node, k)		
 		print("AFTER BOOTSTRAP(%d), k_buckets now look like:" % ret.responding_node.id)
 		print_k_buckets(k_buckets)
 
