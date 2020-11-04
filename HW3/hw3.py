@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from socket import close
 from threading import local
 from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
@@ -25,20 +26,22 @@ def print_k_buckets(k_buckets):
 				print(" ",end="")
 		print()
 				
-def AddNode(node, local_node, k):
+def AddorUpdateNode(node, local_node, k):	
+
 	distance = node.id ^ local_node.id
 	bucket = -1
 	for i in range(4):
 		if (distance < 2**(i+1)) and (distance >= 2**i):
 			bucket = i
-			break	
-
-	if len(k_buckets[bucket]) == k:
-		k_buckets[bucket].pop()
-	k_buckets[bucket].insert(0,node)
-
-def update_kbuckets(node):
-	pass
+			break
+	
+	if node in k_buckets[bucket]:
+		temp = k_buckets[bucket].pop(k_buckets[bucket].index(node))
+		k_buckets[bucket].append(temp)
+	else:
+		if len(k_buckets[bucket]) == k:
+			k_buckets[bucket].pop(0)
+		k_buckets[bucket].append(node)
 
 #Server Implementation
 class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
@@ -49,47 +52,41 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 
 	#return NodeList of k closest nodes to given ID
 	def FindNode(self, IDKey, context):
-		id = IDKey.idkey
+		id = IDKey.idkey		
 		print("Serving FindNode(%d) request for %d" % (id, IDKey.node.id))
-		if id == IDKey.node.id:			
-			temp = []
-			for i in k_buckets:
-				temp += i
-			AddNode(IDKey.node, self.node, self.k)
-			return csci4220_hw3_pb2.NodeList(responding_node=self.node, nodes=temp+[self.node])
-		
-		closest = []
-		for b in range(4):
-			closest += sorted(self.kbuckets[b], key=lambda x : id ^ x.id)[:self.k]		
 
+		closest = []
+		for i in range(4):		
+			closest += k_buckets[i]
+		closest = sorted(closest, key=lambda x : id ^ x.id)[:self.k]
+
+		if (IDKey.node.id == id):
+			closest += [self.node]
+
+		AddorUpdateNode(IDKey.node, self.node, self.k)
 		return csci4220_hw3_pb2.NodeList(responding_node=self.node, nodes=closest)		
 		
 	#returns KV_Node_Wrapper
-	def FindValue(self, request, context):
-		pass
+	def FindValue(self, IDKey, context):	
+		key = IDKey.idkey	
+		print("Serving FindKey(%d) request for %d" % (IDKey.idkey, IDKey.node.id))
+		if key in hash_table.keys():
+			value = csci4220_hw3_pb2.KeyValue(key=key, value=hash_table[key])
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=self.node, mode_kv=True, kv=value)
 
 	#Stores KeyValue at current node and returns IDKey
 	def Store(self, KeyValue, context):
-		if KeyValue.key not in hash_table: 		
-			self.hashtable[KeyValue.key] = KeyValue
-			print("Storing key %d at value %s" % (KeyValue.key, KeyValue.value))
-		return csci4220_hw3_pb2.IDKey(node=self.node, 
-									  idkey=KeyValue.key)
+		AddorUpdateNode(KeyValue.node, self.node, self.k)
+		print("Storing key %d at value \"%s\"" % (KeyValue.key, KeyValue.value))
+		hash_table[KeyValue.key] = KeyValue.value
+		return csci4220_hw3_pb2.IDKey(node=self.node, idkey=KeyValue.key)
 	#Removes the quitting node from the k_bucket
 	def Quit(self, IDKey, context):
 		id = IDKey.idkey
-		found = False
-		i = 0
-		while not found and i < 4:
-			new_bucket = []
-			for j in k_buckets[i]:
-				if j.id == id:
-					print("Evicting node %d from bucket %d" % (id, i))
-					found = True
-					continue
-				new_bucket.append(j)
-			k_buckets[i] = new_bucket
-			i += 1
+		for i in range(len(k_buckets)):
+			if IDKey.node in k_buckets[i]:
+				print("Evicting quitting node %d from bucket %d" % (id, i))
+				k_buckets[i].remove(IDKey.node)
 		return IDKey	
 
 #Client Implementation
@@ -100,10 +97,10 @@ def Bootstrap(hostname, port, local_node, k):
 	remote_port = port
 	with grpc.insecure_channel("%s:%s" % (remote_addr,remote_port)) as channel:
 		stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
-		ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=local_node.id))
-		print("AFTER BOOTSTRAP(%d), k_buckets now look like:" % ret.responding_node.id)		
+		ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=local_node.id))		
 		for i in ret.nodes:
-			AddNode(i, local_node, k)
+			AddorUpdateNode(i, local_node, k)		
+		print("AFTER BOOTSTRAP(%d), k_buckets now look like:" % ret.responding_node.id)
 		print_k_buckets(k_buckets)
 
 def Find_Node(nodeID, local_node):
@@ -119,16 +116,38 @@ def Find_Node(nodeID, local_node):
 			for node in s:
 				with grpc.insecure_channel("%s:%d" % (node.address, node.port)) as channel:
 					stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
-					ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=nodeID))
+					stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=nodeID))
 	
 
-def Find_Value(stub, key):	
-	pass
+def Find_Value(key):
+	if key in hash_table.keys():
+		print("Found data \"%s\" for key %d" % (hash_table[key], key))
+	else:
+		closest = []
+		for i in k_buckets:
+			closest += i
+		closest = sorted(closest, key=lambda x : key ^ x.id)
+
+		for i in closest:
+			pass
 
 #store key:value as KeyValue
 #	finds and stores to closest node id by key
-def Store(key, value):
-	pass
+def Store(key, value, local_node):
+	distance = local_node.id ^ key
+	closest = local_node
+	for i in k_buckets:
+		for j in i:
+			if j.id ^ key < distance:
+				distance = j.id ^ key
+				closest = j
+	print("Storing key %d at node %d" % (key, closest.id))
+	if closest == local_node:
+		hash_table[key] = value		
+	else:			
+		with grpc.insecure_channel("%s:%d" % (closest.address, closest.port)) as channel:
+			stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+			stub.Store(csci4220_hw3_pb2.KeyValue(node=local_node, key=key, value=value))
 
 #quit current node, removes all nodes from current node's kbucket
 def Quit(local_node):
@@ -165,15 +184,16 @@ def run():
 			print("Shutdown node %d" % local_id)
 			sys.exit(0)
 		elif inp[0] == "BOOTSTRAP":
-			buckets = Bootstrap(inp[1], inp[2], local_node, k)	
+			Bootstrap(inp[1], inp[2], local_node, k)
 		elif inp[0] == "FIND_NODE":
 			print("Before FIND_NODE command, k-buckets are:")
 			print_k_buckets(k_buckets)
 		elif inp[0] == "FIND_VALUE":
-			print("Before FIND_VALUE command, k-buckets are:")
-			print_k_buckets(k_buckets)
+			Find_Value(int(inp[1]))
 		elif inp[0] == "STORE":
-			continue
+			Store(int(inp[1]), inp[2], local_node)
+		else:
+			print("Invalid arguement!")
 
 if __name__ == '__main__':
 	run()
