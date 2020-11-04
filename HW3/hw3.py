@@ -69,6 +69,9 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 		if key in hash_table.keys():
 			value = csci4220_hw3_pb2.KeyValue(key=key, value=hash_table[key])
 			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=True, kv=value)
+		else:
+			#TODO Implement the other case
+			pass			
 
 	#Stores KeyValue at current node and returns IDKey
 	def Store(self, KeyValue, context):
@@ -101,6 +104,7 @@ def Bootstrap(hostname, port):
 		print_k_buckets()
 
 def Find_Node(nodeID):
+	#TODO Checking the return of find node has to be implemented
 	if nodeID == local_node.id:
 		print("Found destination id %d" % nodeID)
 	else:
@@ -124,6 +128,8 @@ def Find_Value(key):
 		for i in k_buckets:
 			closest += i
 		closest = sorted(closest, key=lambda x : key ^ x.id)
+
+		#TODO Implement searching the closest nodes
 
 		for i in closest:
 			pass
