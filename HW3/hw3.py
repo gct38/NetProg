@@ -4,7 +4,8 @@ from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
 import sys  # For sys.argv, sys.exit()
 import socket  # for gethostbyname()
-
+import collections
+import math
 import grpc
 
 import csci4220_hw3_pb2
@@ -18,51 +19,45 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 		self.id = local_id
 		self.port = port
 		self.k = k
-		self.nodes = dict() #dict of all nodes key=id, val=Node
+		self.kbuckets = collections.Counter(list)
+		self.stored_values = {}
 
 	#return NodeList of k closest nodes to given ID
-	def FindNode(self, IDKey, context):
-		idkey = IDKey.idkey
-		distances = dict() #key=id, value=distance
-		responder = None
-		for id in self.nodes:
-			if id==idkey:
-				responder = self.nodes[id]
-				continue
-			distance = self.__distance(id, idkey)
-			if len(distances) > self.k:
-				distances[id] = distances 
-				continue
+	def FindNode(self, Key):
+		idkey = Key.node.id
+		closest = []
+		for b in range(0,3):
+			closest.extend(self.kbuckets[b])
 
-			highest = max(distances.values())
-			if distance < highest: #you have a closer node
-				to_remove = None
-				#remove furthest node from distances dict
-				for key, value in distances:
-					if value == highest:  
-						to_remove = key 
-						break
-				del distances[to_remove]
+		closest = sorted(closest, key=lambda x : self.__distance(idkey, x.id))
 
-		#creating NodeList from distances dict
-		#TODO: implement NodeList, don't think nodes parameter is right
-		return csci4220_hw3_pb2.NodeList(responding_node=responder, nodes=list(distances.values()))
+		if len(closest) > 4:
+			closest = closest[:4]
+
+		return csci4220_hw3_pb2.NodeList(responding_node=responder, nodes=closest)
 		
 		
 	#returns KV_Node_Wrapper
-	def FindValue(self, request, context):
-		pass
+	def FindValue(self, Key):
+		idkey = Key.idkey
+
+		if idkey in self.stored_values:
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=responder, mode_kv = True, kv = self.stored_values[idkey], nodes = [])
+
+		closest = []
+		for b in range(0,3):
+			closest.extend(self.kbuckets[b])
+
+		closest = sorted(closest, key=lambda x : self.__distance(idkey, x.id))
+		
+		if len(closest) > 4:
+			closest = closest[:4]
+
+		return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=responder, mode_kv = False, kv = -1, nodes = closest)
 
 	#Stores KeyValue at node w/ ID closest to Key
 	def Store(self, KeyValue, context):
-		difference = float('inf')
-		insert = None
-		for node in self.nodes:
-			if abs(node - KeyValue.key) < difference:
-				difference = abs(node - KeyValue.key)
-				insert = node 
-		#TODO: code to insert KeyValue into kbucket
-
+		pass
 		
 
 	#quit current node, removes all nodes from current node's kbucket
