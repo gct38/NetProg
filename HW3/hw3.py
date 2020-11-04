@@ -29,6 +29,9 @@ def print_k_buckets(k_buckets):
 #Server Implementation
 class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 
+	def __init__(self):
+		self.hashtable = dict()
+
 	#return NodeList of k closest nodes to given ID
 	def FindNode(self, IDKey, context):
 		idkey = IDKey.idkey
@@ -83,14 +86,13 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 		for i in range(len(self.bucket)):
 			for j in range(len(self.bucket[i])):
 				if self.bucket[i][j].value == id:
-					index = j
 					found = True 
 					break
-			if found:
-				if index+1 != len(self.bucket[i])-1:
-					self.bucket[i] = self.bucket[i][:index] + self.bucket[i][index+1:] + [self.bucket[i][index]] 
-				else:
-					self.bucket[i] = self.bucket[i][:index] + [self.bucket[i][index]]
+				if found:
+					if j+1 != len(self.bucket[i])-1:
+						self.bucket[i] = self.bucket[i][:j] + self.bucket[i][j+1:] + [self.bucket[i][j]] 
+					else:
+						self.bucket[i] = self.bucket[i][:j] + [self.bucket[i][j]]
 
 
 #Client Implementation
@@ -157,6 +159,7 @@ def run():
 			buckets = bootstrap(inp[1], inp[2], local_node)	
 		elif (inp[0] == "find_node"):
 			print("Before FIND_NODE command, k-buckets are:")
+			print(kbuckets)
 
 
 	''' Use the following code to convert a hostname to an IP and start a channel
