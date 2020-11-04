@@ -20,22 +20,25 @@ def print_k_buckets(k_buckets):
 		print("%d: " % i, end="")
 		for j in range(len(k_buckets[i])):
 			current = k_buckets[i]
-			print("%d : %d" % (current[j].id, current[j].port),end="")
+			print("%d:%d" % (current[j].id, current[j].port),end="")
 			if (j != len(k_buckets[i])-1):			
 				print(" ",end="")
 		print()
 				
 def AddNode(node, local_node, k):
 	distance = node.id ^ local_node.id
-	bucket = 0
+	bucket = -1
 	for i in range(4):
-		if (distance < 2**(i+1)) and (distance > 2**i):
+		if (distance < 2**(i+1)) and (distance >= 2**i):
 			bucket = i
 			break	
 
 	if len(k_buckets[bucket]) == k:
-		k_buckets[bucket].pop(0)
-	k_buckets[bucket].append(node)
+		k_buckets[bucket].pop()
+	k_buckets[bucket].insert(0,node)
+
+def update_kbuckets(node):
+	pass
 
 #Server Implementation
 class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
@@ -56,8 +59,8 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 			return csci4220_hw3_pb2.NodeList(responding_node=self.node, nodes=temp+[self.node])
 		
 		closest = []
-		for b in range(0,3):
-			closest = sorted(self.kbuckets[b], key=lambda x : id ^ x.id)[:self.k]		
+		for b in range(4):
+			closest += sorted(self.kbuckets[b], key=lambda x : id ^ x.id)[:self.k]		
 
 		return csci4220_hw3_pb2.NodeList(responding_node=self.node, nodes=closest)		
 		
@@ -67,16 +70,14 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 
 	#Stores KeyValue at current node and returns IDKey
 	def Store(self, KeyValue, context):
-		if KeyValue.key not in self.hashtable: 		
+		if KeyValue.key not in hash_table: 		
 			self.hashtable[KeyValue.key] = KeyValue
-			print("Storing key {:} at value {:}".format(KeyValue.key, KeyValue.value))
-		return csci4220_hw3_pb2.IDKey(node=csci4220_hw3_pb2.Node(id=self.id, 
-																 port=self.port, 
-																 address=self.address), 
+			print("Storing key %d at value %s" % (KeyValue.key, KeyValue.value))
+		return csci4220_hw3_pb2.IDKey(node=self.node, 
 									  idkey=KeyValue.key)
-	#Evicts the quitting node from the k_bucket
+	#Removes the quitting node from the k_bucket
 	def Quit(self, IDKey, context):
-		id = IDKey.id
+		id = IDKey.idkey
 		found = False
 		i = 0
 		while not found and i < 4:
@@ -89,21 +90,7 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 				new_bucket.append(j)
 			k_buckets[i] = new_bucket
 			i += 1
-		return IDKey
-
-	#updating kbuckets so that requester's id is most recent 
-	def __update_kbuckets(self, id):
-		found = False
-		for i in range(len(self.bucket)):
-			for j in range(len(self.bucket[i])):
-				if self.bucket[i][j].value == id:
-					found = True 
-					break
-				if found:
-					if j+1 != len(self.bucket[i])-1:
-						self.bucket[i] = self.bucket[i][:j] + self.bucket[i][j+1:] + [self.bucket[i][j]] 
-					else:
-						self.bucket[i] = self.bucket[i][:j] + [self.bucket[i][j]]
+		return IDKey	
 
 #Client Implementation
 
@@ -119,27 +106,38 @@ def Bootstrap(hostname, port, local_node, k):
 			AddNode(i, local_node, k)
 		print_k_buckets(k_buckets)
 
-def Find_Node(IDKey):
-	pass
+def Find_Node(nodeID, local_node):
+	if nodeID == local_node.id:
+		print("Found destination id %d" % nodeID)
+	else:
+		for i in k_buckets:
+			if i.id == nodeID:
+				print("Found desination id %d" % nodeID)
+				return
+
+		for s in k_buckets:			
+			for node in s:
+				with grpc.insecure_channel("%s:%d" % (node.address, node.port)) as channel:
+					stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+					ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=nodeID))
+	
 
 def Find_Value(stub, key):	
 	pass
 
 #store key:value as KeyValue
 #	finds and stores to closest node id by key
-def Store(stub, key, value):
-	#TODO Determine where to store key-value pair
-	#TODO Print record of storage at location
-	pass	
+def Store(key, value):
+	pass
 
 #quit current node, removes all nodes from current node's kbucket
-def Quit(node):
+def Quit(local_node):
 	for i in k_buckets:
 		for j in i:
 			print("Letting %d know im quitting." % j.id)
 			with grpc.insecure_channel("%s:%d" % (j.address,j.port)) as channel:
 				stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
-				stub.Quit(csci4220_hw3_pb2.IDKey(node=node,idkey=node.id))
+				stub.Quit(csci4220_hw3_pb2.IDKey(node=local_node, idkey=local_node.id))
 
 def run():
 	if len(sys.argv) != 4:
