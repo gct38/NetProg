@@ -27,7 +27,10 @@ def print_k_buckets():
 				print(" ",end="")
 		print()
 				
-def AddorUpdateNode(node):	
+def AddorUpdateNode(node):
+
+	if node == local_node:
+		return
 
 	distance = node.id ^ local_node.id
 	bucket = -1
@@ -62,15 +65,19 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 		
 	#returns KV_Node_Wrapper
 	def FindValue(self, IDKey, context):	
-		key = IDKey.idkey
-		AddorUpdateNode(IDKey.node)	
+		key = IDKey.idkey			
 		print("Serving FindKey(%d) request for %d" % (IDKey.idkey, IDKey.node.id))
 		if key in hash_table.keys():
 			value = csci4220_hw3_pb2.KeyValue(key=key, value=hash_table[key])
-			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=True, kv=value)
+			AddorUpdateNode(IDKey.node)
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=True, kv=value, nodes=[])
 		else:
-			#TODO Implement the other case
-			pass			
+			closest = []
+			for i in range(4):		
+				closest += k_buckets[i]
+			closest = sorted(closest, key=lambda x : key ^ x.id)[:k]
+			AddorUpdateNode(IDKey.node)
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=False, kv=-1, nodes=closest)
 
 	#Stores KeyValue at current node and returns IDKey
 	def Store(self, KeyValue, context):
@@ -107,31 +114,96 @@ def Find_Node(nodeID):
 	if nodeID == local_node.id:
 		print("Found destination id %d" % nodeID)
 	else:
+		closest = []
+		asked = []
 		for i in k_buckets:
-			if i.id == nodeID:
-				print("Found desination id %d" % nodeID)
-				return
+			closest += i
+		closest = sorted(closest, key=lambda x : nodeID ^ x.id)[:k]
 
-		for s in k_buckets:			
+		while len([i for i in closest if i not in asked]):
+			s = [i for i in closest if i not in asked]		
 			for node in s:
 				with grpc.insecure_channel("%s:%d" % (node.address, node.port)) as channel:
 					stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
-					stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=nodeID))
-	
+					ret = stub.FindNode(csci4220_hw3_pb2.IDKey(node=local_node,idkey=nodeID))
+					AddorUpdateNode(node)
+					asked.append(node)
+					for i in ret.nodes:						
+						if i in closest:
+							continue
+						AddorUpdateNode(i)
+				if node.id == nodeID:
+					print("Found destination id %d" % nodeID)
+					return
+			for i in k_buckets:
+				closest += i
+			closest = sorted(closest, key=lambda x : nodeID ^ x.id)[:k]
+		print("Could not find destination id %d" % nodeID)				
 
 def Find_Value(key):
 	if key in hash_table.keys():
 		print("Found data \"%s\" for key %d" % (hash_table[key], key))
 	else:
+		#TODO
+		# This chunk of code still needs work
 		closest = []
+		asked = []
 		for i in k_buckets:
 			closest += i
-		closest = sorted(closest, key=lambda x : key ^ x.id)
+		closest = sorted(closest, key=lambda x : key ^ x.id)[:k]
 
-		#TODO Implement searching the closest nodes
+		while len([i for i in closest if i not in asked]):
+			s = [i for i in closest if i not in asked]		
+			for node in s:
+				with grpc.insecure_channel("%s:%d" % (node.address, node.port)) as channel:
+					stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+					ret = stub.FindValue(csci4220_hw3_pb2.IDKey(node=local_node,idkey=key))
+					AddorUpdateNode(node)
+					asked.append(node)
+					for i in ret.nodes:						
+						if i in closest:
+							continue
+						AddorUpdateNode(i)				
+		
 
-		for i in closest:
-			pass
+#store key:value as KeyValue
+#	finds and stores to closest node id by key
+def Store(key, value):
+	distance = local_node.id ^ key
+	closest = local_node
+	for i in k_buckets:
+		for j in i:
+			if j.id ^ key < distance:
+				distance = j.id ^ key
+				closest = j
+	print("Storing key %d at node %d" % (key, closest.id))
+	if closest == local_node:
+		hash_table[key] = value		
+	else:			
+		with grpc.insecure_channel("%s:%d" % (closest.address, closest.port)) as channel:
+			stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+			stub.Store(csci4220_hw3_pb2.KeyValue(node=local_node, key=key, value=value))
+
+#quit current node, removes all nodes from current node's kbucket
+def Quit():
+	for i in k_buckets:
+		for j in i:
+			print("Letting %d know im quitting." % j.id)
+			with grpc.insecure_channel("%s:%d" % (j.address,j.port)) as channel:
+				stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
+				stub.Quit(csci4220_hw3_pb2.IDKey(node=local_node, idkey=local_node.id))
+
+def run():
+	global local_node
+	global k
+	if len(sys.argv) != 4:
+		print("Error, correct usage is {} [my id] [my port] [k]".format(sys.argv[0]))
+		sys.exit(-1)	
+	local_id = int(sys.argv[1])
+	my_port = str(int(sys.argv[2])) # add_insecure_port() will want a string
+	k = int(sys.argv[3])
+	my_hostname = socket.gethostname() # Gets my host name
+	my_address = socket.gethostbyname(my_hostname) # Gets my IP address from my hostname  
 
 #store key:value as KeyValue
 #	finds and stores to closest node id by key
@@ -188,11 +260,18 @@ def run():
 			sys.exit(0)
 		elif inp[0] == "BOOTSTRAP" and (len(inp) == 3):
 			Bootstrap(inp[1], inp[2])
-		elif inp[0] == "FIND_NODE" and (len(inp) == 3):
+		elif inp[0] == "FIND_NODE" and (len(inp) == 2):
 			print("Before FIND_NODE command, k-buckets are:")
 			print_k_buckets()
-		elif inp[0] == "FIND_VALUE" and (len(inp) == 3):
+			Find_Node(int(inp[1]))
+			print("After FIND_NODE command, k-buckets are:")
+			print_k_buckets()
+		elif inp[0] == "FIND_VALUE" and (len(inp) == 2):
+			print("Before FIND_VALUE command, k-buckets are:")
+			print_k_buckets()
 			Find_Value(int(inp[1]))
+			print("After FIND_VALUE command, k-buckets are:")
+			print_k_buckets()
 		elif inp[0] == "STORE" and (len(inp) == 3):
 			Store(int(inp[1]), inp[2])
 		else:
