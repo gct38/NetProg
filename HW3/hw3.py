@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from socket import close
+#from socket import close
 from threading import local
 from csci4220_hw3_pb2_grpc import KadImplServicer
 from concurrent import futures
@@ -19,13 +19,16 @@ k = 0
 #Prints the k_buckets in proper format
 def print_k_buckets():
 	for i in range(len(k_buckets)):
-		print("%d: " % i, end="")
-		for j in range(len(k_buckets[i])):
-			current = k_buckets[i]
-			print("%d:%d" % (current[j].id, current[j].port),end="")
-			if (j != len(k_buckets[i])-1):			
-				print(" ",end="")
-		print()
+		if len(k_buckets[i]) > 0:
+			print("%d: " % i, end="") 
+			for j in range(len(k_buckets[i])):
+				current = k_buckets[i]
+				print("%d:%d" % (current[j].id, current[j].port),end="")
+				if (j != len(k_buckets[i])-1):			
+					print(" ",end="")
+			print()
+		else:
+			print("{}:".format(i))
 				
 def AddorUpdateNode(node):
 
@@ -77,12 +80,12 @@ class KadImplServicer(csci4220_hw3_pb2_grpc.KadImplServicer):
 				closest += k_buckets[i]
 			closest = sorted(closest, key=lambda x : key ^ x.id)[:k]
 			AddorUpdateNode(IDKey.node)
-			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=False, kv=-1, nodes=closest)
+			return csci4220_hw3_pb2.KV_Node_Wrapper(responding_node=local_node, mode_kv=False, nodes=closest)
 
 	#Stores KeyValue at current node and returns IDKey
 	def Store(self, KeyValue, context):
 		AddorUpdateNode(KeyValue.node)
-		print("Storing key %d at value \"%s\"" % (KeyValue.key, KeyValue.value))
+		print("Storing key %d value \"%s\"" % (KeyValue.key, KeyValue.value))
 		hash_table[KeyValue.key] = KeyValue.value
 		return csci4220_hw3_pb2.IDKey(node=local_node, idkey=KeyValue.key)
 	#Removes the quitting node from the k_bucket
@@ -106,7 +109,7 @@ def Bootstrap(hostname, port):
 		for i in ret.nodes:
 			AddorUpdateNode(i)
 		AddorUpdateNode(ret.responding_node)		
-		print("AFTER BOOTSTRAP(%d), k_buckets now look like:" % ret.responding_node.id)
+		print("After BOOTSTRAP(%d), k_buckets now look like:" % ret.responding_node.id)
 		print_k_buckets()
 
 def Find_Node(nodeID):
@@ -141,6 +144,7 @@ def Find_Node(nodeID):
 		print("Could not find destination id %d" % nodeID)				
 
 def Find_Value(key):
+	found = False
 	if key in hash_table.keys():
 		print("Found data \"%s\" for key %d" % (hash_table[key], key))
 	else:
@@ -160,10 +164,18 @@ def Find_Value(key):
 					ret = stub.FindValue(csci4220_hw3_pb2.IDKey(node=local_node,idkey=key))
 					AddorUpdateNode(node)
 					asked.append(node)
-					for i in ret.nodes:						
-						if i in closest:
-							continue
-						AddorUpdateNode(i)				
+					if not ret.mode_kv:
+						for i in ret.nodes:						
+							if i in closest:
+								continue
+							AddorUpdateNode(i)
+					else:
+						if ret.kv.key == key:
+							print("Found value \"{}\" for key {}".format(ret.kv.value, ret.kv.key))
+							found = True
+		if not found:
+			print("Could not find key {}".format(key))
+								
 		
 
 #store key:value as KeyValue
@@ -188,7 +200,7 @@ def Store(key, value):
 def Quit():
 	for i in k_buckets:
 		for j in i:
-			print("Letting %d know im quitting." % j.id)
+			print("Letting %d know I'm quitting." % j.id)
 			with grpc.insecure_channel("%s:%d" % (j.address,j.port)) as channel:
 				stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
 				stub.Quit(csci4220_hw3_pb2.IDKey(node=local_node, idkey=local_node.id))
@@ -227,7 +239,7 @@ def Store(key, value):
 def Quit():
 	for i in k_buckets:
 		for j in i:
-			print("Letting %d know im quitting." % j.id)
+			print("Letting %d know I'm quitting." % j.id)
 			with grpc.insecure_channel("%s:%d" % (j.address,j.port)) as channel:
 				stub = csci4220_hw3_pb2_grpc.KadImplStub(channel)
 				stub.Quit(csci4220_hw3_pb2.IDKey(node=local_node, idkey=local_node.id))
@@ -256,7 +268,7 @@ def run():
 		inp = input().split()
 		if inp[0] == "QUIT":
 			Quit()
-			print("Shutdown node %d" % local_id)
+			print("Shut down node %d" % local_id)
 			sys.exit(0)
 		elif inp[0] == "BOOTSTRAP" and (len(inp) == 3):
 			Bootstrap(inp[1], inp[2])
