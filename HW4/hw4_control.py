@@ -69,6 +69,9 @@ def update_neighbors(nodes):
                 if nodes[id1] != nodes[id2] and nodes[id1].in_range(nodes[id2]):
                     nodes[id1].connections[id2] = distance_to(nodes[id1], nodes[id2])
                     nodes[id2].connections[id1] = distance_to(nodes[id2], nodes[id1])
+                if not nodes[id1].in_range(nodes[id2]) and nodes[id1] != nodes[id2] and id1 in nodes[id2].connections and id2 in nodes[id1].connections:
+                    del nodes[id1].connections[id2]
+                    del nodes[id2].connections[id1]
 
 #updates distances of all nodes
 def update_distance(nodes):
@@ -84,8 +87,9 @@ def parse_bases(file):
         bases[str(base[0])] = BaseStation(base[0],base[1],base[2],base[3], base[4:])
     return bases
 
-
-def send_data():
+#TODO:
+def senddata(origin, destination):
+    #create DATAMESSAGE
     pass
 
 #TODO: double check to make sure this is right
@@ -95,6 +99,36 @@ def quit(inputs):
         #print('socket {} should be closed by now'.format(socket))
         socket.close()
 
+#Finds (x,y) coordinates of given NodeID
+def where(nodes, id):
+    return "THERE {} {} {}".format(id, nodes[id].x, nodes[id].y)
+
+#TODO:
+def updateposition(nodes, id, range, x, y):
+    remove_disconnected(nodes)
+    nodes[id].x = x
+    nodes[id].y = y
+    nodes[id].range = range
+    update_distance(nodes)
+    update_neighbors(nodes)
+
+    print("printing nodes after updating id {} with range {} to ({},{})".format(id, range, x, y))
+    for id in nodes:
+        print(nodes[id])
+    print()
+
+    num_reachable = 0
+    reachable = ""
+    for id1 in nodes:
+        if id1 == id:
+            for conn_id in nodes[id1].connections:
+                num_reachable += 1
+                reachable += " {} {} {}".format(conn_id, nodes[conn_id].x, nodes[conn_id].y)
+    return "REACHABLE {}{}".format(num_reachable, reachable)
+
+#TODO:
+def datamessage():
+    pass
 
 def run_control():
     if len(sys.argv) != 3:
@@ -132,8 +166,7 @@ def run_control():
                 message = sys.stdin.readline().strip().split()
                 print("std in message: {}".format(message))
                 if len(message) == 3 and message[0].upper() == "SENDDATA":
-                    pass
-                    #TODO: implement send_data function
+                    senddata(str(message[1]), str(message[2]))
                 elif len(message) == 1 and message[0].upper() == "QUIT":
                     quit(inputs)
                     return
@@ -143,7 +176,6 @@ def run_control():
                 message = client.recv(1024)
                 if message:
                     message = str(message.decode('utf-8'))
-                    #print("Client{} {}".format(client.getpeername(), client))
                     print("From Client:", message)
                     if message.find('hw4_client.py') != -1:
                         message = message.replace('[','').replace(']','').replace('\'','').split(',')
@@ -160,12 +192,13 @@ def run_control():
                         #Commands received from Sensor client
                         message = message.split()
                         if len(message) == 2 and message[0].upper() == "WHERE":
-                            pass
+                            there = where(nodes, str(message[1]))
+                            client.sendall(there.encode('utf-8'))
                         elif len(message) == 5 and message[0].upper() == "UPDATEPOSITION":
-                            #update positions of clients and update their distances and repopulate neighbors
-                            update_neighbors(nodes)
-                            update_distance(nodes)
-                        elif len(message) == 2 and message[0].upper() == "DATAMESSAGE":
+                            reachable = updateposition(nodes, str(message[1]), int(message[2]), int(message[3]), int(message[4]))
+                            print("Reachable to send to client:", reachable)
+                            client.sendall(reachable.encode('utf-8'))
+                        elif len(message) == 6 and message[0].upper() == "DATAMESSAGE":
                             pass
                         else:
                             print("Invalid arguments from client")
