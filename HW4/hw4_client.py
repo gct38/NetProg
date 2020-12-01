@@ -2,11 +2,10 @@ import sys  # For arg parsing
 import socket  # For sockets
 import select
 
-#TODO
-def move(server, id, old_x, old_y, new_x, new_y, range):
-    old_x = new_x
-    old_y = new_y
+
+def move(server, id, new_x, new_y, range):
     server.sendall("UPDATEPOSITION {} {} {} {}".format(id, range, new_x, new_y).encode('utf-8'))
+    return new_x, new_y
 
 #TODO:
 def senddata(server, destination, id, range, x, y):
@@ -63,13 +62,12 @@ def run_client():
                 message = stdin.split()
                 print("STDIN:", message)
                 if len(message) == 3 and message[0].upper() == "MOVE":
-                    move(server_socket, id, x, y, int(message[1]), int(message[2]), range)
+                    x,y = move(server_socket, id, int(message[1]), int(message[2]), range)
                 elif len(message) == 2 and message[0].upper() == "SENDDATA":
                     pass
-                    '''
                 elif len(message) == 2 and message[0].upper() == "WHERE":
-                    there = where(server, stdin)
-                    '''
+                    there = where(server_socket, stdin)
+                    print(there)
                 elif len(message) == 1 and message[0].upper() == "QUIT":
                     quit(server_socket)
                     return

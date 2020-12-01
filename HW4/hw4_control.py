@@ -103,7 +103,7 @@ def quit(inputs):
 def where(nodes, id):
     return "THERE {} {} {}".format(id, nodes[id].x, nodes[id].y)
 
-#TODO:
+
 def updateposition(nodes, id, range, x, y):
     remove_disconnected(nodes)
     nodes[id].x = x
