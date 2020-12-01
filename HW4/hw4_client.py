@@ -124,9 +124,6 @@ def run_client():
                     #print("From Server:", message)
                     if message[0].upper() == "DATAMESSAGE":
                         datamessage(server_socket, id, ranges, x, y, message[1], message[2], message[3], int(message[4]), message[5:])
-                    elif message[0].upper() == "REACHABLE":
-                        #TODO: figure out what you want to do when receiving a REACHABLE reply from server
-                        print("x: {} y: {} num_reachable: {}".format(x, y, message[1]))
                     else:
                         print("Invalid arguments from server")
             elif item == sys.stdin:             #Sensor Client STDIN commands
