@@ -116,16 +116,12 @@ def updateposition(nodes, id, range, x, y):
     for id in nodes:
         print(nodes[id])
     print()
-
-    reached = []
+    #TODO: have reached be sorted by node closest to destination?
     reachable = ""
-    for id1 in nodes:
-        if id1 == id:
-            for conn_id in nodes[id1].connections:
-                reached.append(nodes[conn_id])
-    reached = sorted(reached, key=lambda x: (distance_to(x,nodes[id]), x.id))
-    for node in reached:
-        reachable += " {} {} {}".format(node.id, node.x, node.y)
+    reached = sorted(list(nodes[id].connections.keys()), key=lambda x: (distance_to(nodes[id], nodes[x]), x))
+    for node_id in reached:
+        if node_id != id:
+            reachable += " {} {} {}".format(node_id, nodes[node_id].x, nodes[node_id].y)
     return "REACHABLE {}{}".format(len(reached), reachable)
 
 #TODO:

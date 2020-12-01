@@ -12,8 +12,18 @@ def move(server, id, new_x, new_y, range):
 def senddata(server, destination, source, range, x, y):
     reachable = updateposition(server, source, range, x, y)
     print(reachable)
-    next = source
-    datamessage = "DATAMESSAGE {} {} {} {} {} {}".format(source, next, destination, 1, [next])
+    #TODO: make an updateposition call to server for destination?
+    reachable_nodes = reachable.split()[2::3]
+    closest = reachable.split()[2]
+    #print(reachable_nodes, closest)
+    if destination == source:
+        print("Sent a message directly to {}".format(source))
+    elif destination in reachable_nodes:
+        print("Sent a message directly to {}".format(destination))
+        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]).encode('utf-8'))
+    else:
+        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]).encode('utf-8'))
+        print("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]))
 
 #sends UPDATEPOSITION command to server and waits until it replies with a REACHABLE message
 def updateposition(server, id, range, x, y):
