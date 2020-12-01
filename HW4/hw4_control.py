@@ -92,8 +92,8 @@ def senddata(origin, destination):
     #create DATAMESSAGE
     pass
 
-#TODO: double check to make sure this is right
-#corresponds to quit command, closes all clients and then server
+
+#corresponds to quit command, closes server
 def quit(inputs):
     for socket in inputs:
         #print('socket {} should be closed by now'.format(socket))
@@ -103,7 +103,7 @@ def quit(inputs):
 def where(nodes, id):
     return "THERE {} {} {}".format(id, nodes[id].x, nodes[id].y)
 
-
+#updates the sensor client's location and every node's connections
 def updateposition(nodes, id, range, x, y):
     remove_disconnected(nodes)
     nodes[id].x = x
@@ -137,7 +137,8 @@ def run_control():
 
     inputs = [sys.stdin]
     clients = {}                #stores all of our Sensor Clients
-    node_addresses = {}         #stores client address as key and id as value
+    node_addresses = {}         #stores client address as key and node id as value
+                                #node id can be used as a key in nodes 
     port = int(sys.argv[1])
     file = str(sys.argv[2])
     nodes = parse_bases(file)   #dict of all clients/base stations

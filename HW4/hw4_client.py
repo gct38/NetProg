@@ -2,32 +2,43 @@ import sys  # For arg parsing
 import socket  # For sockets
 import select
 
-
+#Sends UPDATEPOSTITION command to server and returns new (x,y) coordinates
 def move(server, id, new_x, new_y, range):
-    server.sendall("UPDATEPOSITION {} {} {} {}".format(id, range, new_x, new_y).encode('utf-8'))
+    reachable = updateposition(server, id, range, new_x, new_y)
+    print(reachable)
     return new_x, new_y
 
 #TODO:
-def senddata(server, destination, id, range, x, y):
-    server.sendall("UPDATEPOSITION {} {} {} {} {} {}".format(id, range, x, y).encode('utf-8'))
-    datamessage = "DATAMESSAGE {} {} {} {} {} {}".format(id, id, destination, 0, [])
+def senddata(server, destination, source, range, x, y):
+    reachable = updateposition(server, source, range, x, y)
+    print(reachable)
+    next = source
+    datamessage = "DATAMESSAGE {} {} {} {} {} {}".format(source, next, destination, 1, [next])
+
+#sends UPDATEPOSITION command to server and waits until it replies with a REACHABLE message
+def updateposition(server, id, range, x, y):
+    server.sendall("UPDATEPOSITION {} {} {} {}".format(id, range, x, y).encode('utf-8'))
+    while True:
+        reachable = server.recv(1024)
+        if reachable:
+            break
+    return reachable.decode('utf-8')
 
 #corresponds with QUIT command
+#closes the server connection
 def quit(server):
     server.close()
 
-#TODO:
+#Forwards WHERE command to server. Waits until receives THERE reply from server
 def where(server, message):
     server.sendall(message.encode('utf-8'))
-    there = ""
     while True:
         there = server.recv(1024)
         if there:
             break
-    there = there.decode('utf-8')
-    return there
+    return there.decode('utf-8')
 
-
+#main control loop for client
 def run_client():
     if len(sys.argv) != 7:
         print(f"Proper usage is {sys.argv[0]} [control address] [control port] [sensor id] [sensor range] [initial x] [initial y]")
@@ -64,7 +75,8 @@ def run_client():
                 if len(message) == 3 and message[0].upper() == "MOVE":
                     x,y = move(server_socket, id, int(message[1]), int(message[2]), range)
                 elif len(message) == 2 and message[0].upper() == "SENDDATA":
-                    pass
+                    #TODO
+                    senddata(server_socket, str(message[1]), id, range, x, y)
                 elif len(message) == 2 and message[0].upper() == "WHERE":
                     there = where(server_socket, stdin)
                     print(there)
