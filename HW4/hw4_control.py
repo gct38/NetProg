@@ -46,6 +46,23 @@ class BaseStation:
 def distance_to(obj, other):
     return sqrt((obj.x-other.x)**2 + (obj.y-other.y)**2)
 
+#helper funciton returns node id that is connected to current node and is closest to destination
+def closest_to_dest(nodes, hop_list, dest, current):
+    if dest in nodes[current].connections:
+        return dest
+    shortest = 100000
+    for id in nodes[current].connections:
+        if distance_to(nodes[current], nodes[id]) < shortest and id not in hop_list:
+                shortest = distance_to(nodes[current], nodes[id])
+                closest = id
+    return closest
+
+#returns whether or not we are creating a cycle
+def no_more_hops(nodes, hop_list, next):
+    reachable = set(nodes[next].connections.keys())
+    hop_list = set(hop_list)
+    return hop_list.issuperset(reachable)
+
 #initializes all distances to -1 (used to initialize all the Sensor neighbors and their distances to -1)
 def populate_connections(links):
     connections = {}
@@ -117,12 +134,12 @@ def updateposition(nodes, id, range, x, y):
     nodes[id].range = range
     update_distance(nodes)
     update_neighbors(nodes)
-
+    '''
     print("printing nodes after updating id {} with range {} to ({},{})".format(id, range, x, y))
     for id in nodes:
         print(nodes[id])
     print()
-
+    '''
     reachable = ""
     num_reachable = 0
     for node_id in nodes[id].connections:
@@ -132,20 +149,47 @@ def updateposition(nodes, id, range, x, y):
 
 #TODO:
 def datamessage(nodes, node_addresses, origin, next, destination, hop_len, hop_list):
-    print(origin, next, destination, hop_len, hop_list)
+    #print(origin, next, destination, hop_len, hop_list)
     if type(nodes[next]) == Sensor:             # Sensor to Sensor relaying
-        print("Relaying Sensor-to-Sensor message to {}".format(next))
+        #print("Relaying Sensor-to-Sensor message to {}".format(next))
         client = client_lookup(next, node_addresses)
         client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
-    elif type(nodes[next]) == BaseStation:      # Message was sent to a BaseStation
-        print("Message was sent for base station")
+    else:                                       # Message was sent to a BaseStation
+        #print("Message was sent for base station")
         if next == destination:                 # destination matches its base id
-            print("{}: Message from {} to {} successfully received".format(next, origin, destination))
+            print("{}: Message from {} to {} successfully received.".format(next, origin, destination))
         else:                                   # base is not destination
-            if sorted(hop_list) == sorted(list(nodes[next].connections.keys())):    # Can't forward message anymore without creating a cycle
-                print("{}: Message from {} to {} could not be delivered".format(next, origin, destination))
+            if no_more_hops(nodes, hop_list, next):    # Can't forward message anymore without creating a cycle
+                print("{}: Message from {} to {} could not be delivered.".format(next, origin, destination))
             else:                                                                   # Forward message to get closer to destination
+                next_hop = closest_to_dest(nodes, hop_list, destination, next)
                 hop_len += 1
+                hop_list.append(next_hop)
+                print("{}: Message from {} to {} being forwarded through {}.".format(next, origin, destination, next))   #TODO: FIX next_hop is saying destination???
+                if type(nodes[next_hop]) == Sensor:
+                    client = client_lookup(next_hop, node_addresses)
+                    client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next_hop, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
+                else:
+                    #handle internally since you want to move to another base station
+                    '''
+                    if origin == next and next == destination:
+                        print("{}: Sent a new message directly to {}".format(next, destination))
+                    elif origin == next:
+                        print("{}: Sent a message bound for {}".format(next, destination))
+                    '''
+                    sensor = False
+                    while not sensor:
+                        if next_hop == destination:
+                            print("{}: Message from {} to {} successfully received.".format(next_hop, origin, destination))
+                            sensor = True
+                        next_hop = closest_to_dest(nodes, hop_list, destination, next_hop)
+                        hop_len += 1
+                        hop_list.append(next_hop)
+                        if type(nodes[next_hop]) == Sensor:
+                            client = client_lookup(next_hop, node_addresses)
+                            client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next_hop, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
+                            sensor = True
+
 
 
 def run_control():
@@ -183,7 +227,7 @@ def run_control():
                 inputs.append(client_socket)
             elif client == sys.stdin:           #Control Server STDIN commands
                 message = sys.stdin.readline().strip().split()
-                print("std in message: {}".format(message))
+                #print("std in message: {}".format(message))
                 if len(message) == 3 and message[0].upper() == "SENDDATA":
                     senddata(str(message[1]), str(message[2]))
                 elif len(message) == 1 and message[0].upper() == "QUIT":
@@ -195,18 +239,19 @@ def run_control():
                 message = client.recv(1024)
                 if message:
                     message = str(message.decode('utf-8'))
-                    print("From Client:", message)
+                    #print("From Client:", message)
                     if message.find('hw4_client.py') != -1:
                         message = message.replace('[','').replace(']','').replace('\'','').split(',')
                         nodes[str(message[3]).strip()] = Sensor(message[3].strip(), message[4].strip(), message[5].strip(), message[6].strip())
                         node_addresses[client] = str(message[3]).strip()
                         update_neighbors(nodes)
                         update_distance(nodes)
-
+                        '''
                         print("\nUpdated neighbors and distance")
                         for id in nodes:
                             print(nodes[id])
                         print()
+                        '''
                     else:
                         #Commands received from Sensor client
                         message = message.split()
@@ -215,7 +260,7 @@ def run_control():
                             client.sendall(there.encode('utf-8'))
                         elif len(message) == 5 and message[0].upper() == "UPDATEPOSITION":
                             reachable = updateposition(nodes, str(message[1]), int(message[2]), int(message[3]), int(message[4]))
-                            print("Reachable to send to client:", reachable)
+                            #print("Reachable to send to client:", reachable)
                             client.sendall(reachable.encode('utf-8'))
                         elif message[0].upper() == "DATAMESSAGE":
                             datamessage(nodes, node_addresses, message[1], message[2], message[3], int(message[4]), message[5:])
@@ -229,12 +274,13 @@ def run_control():
                     update_neighbors(nodes)
                     update_distance(nodes)
                     client.close()
-
+                    '''
                     print("Client {} has disconnected".format(node_addresses[client]))
                     print("Updated neighbors and distance")
                     for id in nodes:
                         print(nodes[id])
                     print()
+                    '''
                     continue
 
 
