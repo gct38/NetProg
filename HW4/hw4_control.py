@@ -117,14 +117,16 @@ def updateposition(nodes, id, range, x, y):
         print(nodes[id])
     print()
 
-    num_reachable = 0
+    reached = []
     reachable = ""
     for id1 in nodes:
         if id1 == id:
             for conn_id in nodes[id1].connections:
-                num_reachable += 1
-                reachable += " {} {} {}".format(conn_id, nodes[conn_id].x, nodes[conn_id].y)
-    return "REACHABLE {}{}".format(num_reachable, reachable)
+                reached.append(nodes[conn_id])
+    reached = sorted(reached, key=lambda x: (distance_to(x,nodes[id]), x.id))
+    for node in reached:
+        reachable += " {} {} {}".format(node.id, node.x, node.y)
+    return "REACHABLE {}{}".format(len(reached), reachable)
 
 #TODO:
 def datamessage():
@@ -138,7 +140,7 @@ def run_control():
     inputs = [sys.stdin]
     clients = {}                #stores all of our Sensor Clients
     node_addresses = {}         #stores client address as key and node id as value
-                                #node id can be used as a key in nodes 
+                                #node id can be used as a key in nodes
     port = int(sys.argv[1])
     file = str(sys.argv[2])
     nodes = parse_bases(file)   #dict of all clients/base stations
