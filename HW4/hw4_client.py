@@ -39,16 +39,16 @@ def senddata(server, destination, source, ranges, x, y):
     reachable_nodes = reachable.split()[2::3]
 
     if destination == source:
-        print("{}: Sent a message directly to {}.".format(source, source))
+        print("{}: Sent a new message directly to {}.".format(source, source))
     elif destination in reachable_nodes:
-        print("{}: Sent a message directly to {}.".format(source, destination))
+        print("{}: Sent a new message directly to {}.".format(source, destination))
         server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, destination, destination, 1, destination).encode('utf-8'))
     else:
         there = where(server, "WHERE {}".format(destination))
         #print(there)
         closest = closest_to_dest(reachable, there)
         #print(closest)
-        print("{}: Sent a message bound for {}.".format(source, destination))
+        print("{}: Sent a new message bound for {}.".format(source, destination))
         server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest).encode('utf-8'))
         #print("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest))
 
@@ -95,8 +95,8 @@ def datamessage(server, id, ranges, x, y, origin, next, dest, hop_len, hop_list)
             closest = closest_to_dest(reachable, there)
             hop_len += 1
             hop_list.append(closest)
-            print("{}: Sent a message bound for {}.".format(id, dest))
-            server.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, closest, dest, hop_len, hop_list).encode('utf-8'))
+            print("{}: Sent a new message bound for {}.".format(id, dest))
+            server.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, closest, dest, hop_len, " ".join(hop_list)).encode('utf-8'))
             #print("DATAMESSAGE {} {} {} {} {}".format(source, closest, dest, hop_len, hop_list))
 
 #main control loop for client

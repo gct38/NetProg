@@ -51,9 +51,10 @@ def closest_to_dest(nodes, hop_list, dest, current):
     if dest in nodes[current].connections:
         return dest
     shortest = 100000
+    #print("Connected to", nodes[current].connections)
     for id in nodes[current].connections:
-        if distance_to(nodes[current], nodes[id]) < shortest and id not in hop_list:
-                shortest = distance_to(nodes[current], nodes[id])
+        if distance_to(nodes[dest], nodes[id]) < shortest and id not in hop_list:
+                shortest = distance_to(nodes[dest], nodes[id])
                 closest = id
     return closest
 
@@ -165,7 +166,7 @@ def datamessage(nodes, node_addresses, origin, next, destination, hop_len, hop_l
                 next_hop = closest_to_dest(nodes, hop_list, destination, next)
                 hop_len += 1
                 hop_list.append(next_hop)
-                print("{}: Message from {} to {} being forwarded through {}.".format(next, origin, destination, next))   #TODO: FIX next_hop is saying destination???
+                print("{}: Message from {} to {} being forwarded through {}.".format(next, origin, destination, next))
                 if type(nodes[next_hop]) == Sensor:
                     client = client_lookup(next_hop, node_addresses)
                     client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next_hop, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
@@ -177,18 +178,27 @@ def datamessage(nodes, node_addresses, origin, next, destination, hop_len, hop_l
                     elif origin == next:
                         print("{}: Sent a message bound for {}".format(next, destination))
                     '''
+                    #print("moving to another base station", next_hop)
+                    #current = next_hop
                     sensor = False
                     while not sensor:
                         if next_hop == destination:
-                            print("{}: Message from {} to {} successfully received.".format(next_hop, origin, destination))
-                            sensor = True
-                        next_hop = closest_to_dest(nodes, hop_list, destination, next_hop)
-                        hop_len += 1
-                        hop_list.append(next_hop)
+                            if type(nodes[next_hop]) == Sensor:
+                                 client = client_lookup(next_hop, node_addresses)
+                                 client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next_hop, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
+                            else:
+                                print("{}: Message from {} to {} successfully received.".format(next_hop, origin, destination))
+                            return
                         if type(nodes[next_hop]) == Sensor:
                             client = client_lookup(next_hop, node_addresses)
                             client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next_hop, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
                             sensor = True
+                        else:
+                            print("{}: Message from {} to {} being forwarded through {}".format(next_hop, origin, destination, next_hop))
+                        next_hop = closest_to_dest(nodes, hop_list, destination, next_hop)
+                        hop_len += 1
+                        hop_list.append(next_hop)
+
 
 
 
