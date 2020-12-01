@@ -87,6 +87,12 @@ def parse_bases(file):
         bases[str(base[0])] = BaseStation(base[0],base[1],base[2],base[3], base[4:])
     return bases
 
+#helper function to return the client given its node id
+def client_lookup(id, node_addresses):
+    for client in node_addresses:
+        if node_addresses[client] == id:
+            return client
+
 #TODO:
 def senddata(origin, destination):
     #create DATAMESSAGE
@@ -116,17 +122,31 @@ def updateposition(nodes, id, range, x, y):
     for id in nodes:
         print(nodes[id])
     print()
-    #TODO: have reached be sorted by node closest to destination?
+
     reachable = ""
-    reached = sorted(list(nodes[id].connections.keys()), key=lambda x: (distance_to(nodes[id], nodes[x]), x))
-    for node_id in reached:
-        if node_id != id:
-            reachable += " {} {} {}".format(node_id, nodes[node_id].x, nodes[node_id].y)
-    return "REACHABLE {}{}".format(len(reached), reachable)
+    num_reachable = 0
+    for node_id in nodes[id].connections:
+        reachable += " {} {} {}".format(node_id, nodes[node_id].x, nodes[node_id].y)
+        num_reachable += 1
+    return "REACHABLE {}{}".format(num_reachable, reachable)
 
 #TODO:
-def datamessage():
-    pass
+def datamessage(nodes, node_addresses, origin, next, destination, hop_len, hop_list):
+    print(origin, next, destination, hop_len, hop_list)
+    if type(nodes[next]) == Sensor:             # Sensor to Sensor relaying
+        print("Relaying Sensor-to-Sensor message to {}".format(next))
+        client = client_lookup(next, node_addresses)
+        client.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, next, destination, hop_len, " ".join(hop_list)).encode('utf-8'))
+    elif type(nodes[next]) == BaseStation:      # Message was sent to a BaseStation
+        print("Message was sent for base station")
+        if next == destination:                 # destination matches its base id
+            print("{}: Message from {} to {} successfully received".format(next, origin, destination))
+        else:                                   # base is not destination
+            if sorted(hop_list) == sorted(list(nodes[next].connections.keys())):    # Can't forward message anymore without creating a cycle
+                print("{}: Message from {} to {} could not be delivered".format(next, origin, destination))
+            else:                                                                   # Forward message to get closer to destination
+                hop_len += 1
+
 
 def run_control():
     if len(sys.argv) != 3:
@@ -197,8 +217,8 @@ def run_control():
                             reachable = updateposition(nodes, str(message[1]), int(message[2]), int(message[3]), int(message[4]))
                             print("Reachable to send to client:", reachable)
                             client.sendall(reachable.encode('utf-8'))
-                        elif len(message) == 6 and message[0].upper() == "DATAMESSAGE":
-                            pass
+                        elif message[0].upper() == "DATAMESSAGE":
+                            datamessage(nodes, node_addresses, message[1], message[2], message[3], int(message[4]), message[5:])
                         else:
                             print("Invalid arguments from client")
                 else:

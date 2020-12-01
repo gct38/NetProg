@@ -1,33 +1,55 @@
 import sys  # For arg parsing
 import socket  # For sockets
 import select
+from math import sqrt
+
+#helper function to calculate Euclidean distance between two nodes
+def distance_to(x1, y1, x2, y2):
+    return sqrt((x1-x2)**2 + (y1-y2)**2)
+
+#returns a reachable node that is closest to the destination
+def closest_to_dest(reachable, there):
+    x, y = there.split()[2:]
+    x = int(x)
+    y = int(y)
+    node = ""
+    shortest = 100000
+    reachable_nodes = reachable.split()[2:]
+    for i in range(0,len(reachable_nodes),3):
+        if distance_to(x, y, int(reachable_nodes[i+1]), int(reachable_nodes[i+2])) < shortest:
+            shortest = distance_to(x, y, int(reachable_nodes[i+1]), int(reachable_nodes[i+2]))
+            node = reachable_nodes[i]
+    return node
 
 #Sends UPDATEPOSTITION command to server and returns new (x,y) coordinates
-def move(server, id, new_x, new_y, range):
-    reachable = updateposition(server, id, range, new_x, new_y)
+def move(server, id, new_x, new_y, ranges):
+    reachable = updateposition(server, id, ranges, new_x, new_y)
     print(reachable)
     return new_x, new_y
 
 #TODO:
-def senddata(server, destination, source, range, x, y):
-    reachable = updateposition(server, source, range, x, y)
+def senddata(server, destination, source, ranges, x, y):
+    reachable = updateposition(server, source, ranges, x, y)
     print(reachable)
-    #TODO: make an updateposition call to server for destination?
     reachable_nodes = reachable.split()[2::3]
-    closest = reachable.split()[2]
-    #print(reachable_nodes, closest)
+
     if destination == source:
         print("Sent a message directly to {}".format(source))
     elif destination in reachable_nodes:
         print("Sent a message directly to {}".format(destination))
-        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]).encode('utf-8'))
+        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, destination, destination, 1, destination).encode('utf-8'))
     else:
-        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]).encode('utf-8'))
-        print("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, [closest]))
+        there = where(server, "WHERE {}".format(destination))
+        #print(there)
+        closest = closest_to_dest(reachable, there)
+        #print(closest)
+        print("Sent a message bound for {}".format(destination))
+        server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest).encode('utf-8'))
+        print("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest))
 
 #sends UPDATEPOSITION command to server and waits until it replies with a REACHABLE message
-def updateposition(server, id, range, x, y):
-    server.sendall("UPDATEPOSITION {} {} {} {}".format(id, range, x, y).encode('utf-8'))
+def updateposition(server, id, ranges, x, y):
+    server.sendall("UPDATEPOSITION {} {} {} {}".format(id, ranges, x, y).encode('utf-8'))
     while True:
         reachable = server.recv(1024)
         if reachable:
@@ -55,7 +77,7 @@ def run_client():
         sys.exit(0)
 
     id = str(sys.argv[3])
-    range = int(sys.argv[4])
+    ranges = int(sys.argv[4])
     x = int(sys.argv[5])
     y = int(sys.argv[6])
 
@@ -83,10 +105,10 @@ def run_client():
                 message = stdin.split()
                 print("STDIN:", message)
                 if len(message) == 3 and message[0].upper() == "MOVE":
-                    x,y = move(server_socket, id, int(message[1]), int(message[2]), range)
+                    x,y = move(server_socket, id, int(message[1]), int(message[2]), ranges)
                 elif len(message) == 2 and message[0].upper() == "SENDDATA":
                     #TODO
-                    senddata(server_socket, str(message[1]), id, range, x, y)
+                    senddata(server_socket, str(message[1]), id, ranges, x, y)
                 elif len(message) == 2 and message[0].upper() == "WHERE":
                     there = where(server_socket, stdin)
                     print(there)
