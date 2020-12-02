@@ -32,7 +32,7 @@ def move(server, id, new_x, new_y, ranges):
     reachable = updateposition(server, id, ranges, new_x, new_y)
     return new_x, new_y
 
-#TODO:
+#handles SENDDATA command from STD IN
 def senddata(server, destination, source, ranges, x, y):
     reachable = updateposition(server, source, ranges, x, y)
     reachable_nodes = reachable.split()[2::3]

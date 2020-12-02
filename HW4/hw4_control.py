@@ -119,7 +119,6 @@ def parse_bases(file):
 #corresponds to quit command, closes server
 def quit(inputs):
     for socket in inputs:
-        #print('socket {} should be closed by now'.format(socket))
         socket.close()
 
 #Finds (x,y) coordinates of given NodeID
@@ -142,7 +141,7 @@ def updateposition(nodes, id, range, x, y):
         num_reachable += 1
     return "REACHABLE {}{}".format(num_reachable, reachable)
 
-#TODO:
+#handles receiving a DATAMESSAGE from Sensor Client
 def datamessage(nodes, node_addresses, origin, next, destination, hop_len, hop_list):
     if type(nodes[next]) == Sensor:             # Sensor to Sensor relaying
         client = client_lookup(next, node_addresses)
