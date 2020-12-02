@@ -8,7 +8,7 @@ def distance_to(x1, y1, x2, y2):
     return sqrt((x1-x2)**2 + (y1-y2)**2)
 
 #returns a reachable node that is closest to the destination
-def closest_to_dest(reachable, there):
+def closest_to_dest(reachable, there, hop_list):
     x, y = there.split()[2:]
     x = int(x)
     y = int(y)
@@ -16,7 +16,7 @@ def closest_to_dest(reachable, there):
     shortest = 100000
     reachable_nodes = reachable.split()[2:]
     for i in range(0,len(reachable_nodes),3):
-        if distance_to(x, y, int(reachable_nodes[i+1]), int(reachable_nodes[i+2])) < shortest:
+        if distance_to(x, y, int(reachable_nodes[i+1]), int(reachable_nodes[i+2])) < shortest and reachable_nodes[i] not in hop_list:
             shortest = distance_to(x, y, int(reachable_nodes[i+1]), int(reachable_nodes[i+2]))
             node = reachable_nodes[i]
     return node
@@ -35,22 +35,20 @@ def move(server, id, new_x, new_y, ranges):
 #TODO:
 def senddata(server, destination, source, ranges, x, y):
     reachable = updateposition(server, source, ranges, x, y)
-    #print(reachable)
     reachable_nodes = reachable.split()[2::3]
 
-    if destination == source:
+    if len(reachable_nodes) == 0:
+        print("{}: Message from {} to {} could not be delivered.".format(source, source, destination))
+    elif destination == source:
         print("{}: Sent a new message directly to {}.".format(source, source))
     elif destination in reachable_nodes:
         print("{}: Sent a new message directly to {}.".format(source, destination))
         server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, destination, destination, 1, destination).encode('utf-8'))
     else:
         there = where(server, "WHERE {}".format(destination))
-        #print(there)
-        closest = closest_to_dest(reachable, there)
-        #print(closest)
+        closest = closest_to_dest(reachable, there, [])
         print("{}: Sent a new message bound for {}.".format(source, destination))
         server.sendall("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest).encode('utf-8'))
-        #print("DATAMESSAGE {} {} {} {} {}".format(source, closest, destination, 1, closest))
 
 #sends UPDATEPOSITION command to server and waits until it replies with a REACHABLE message
 def updateposition(server, id, ranges, x, y):
@@ -80,7 +78,6 @@ def datamessage(server, id, ranges, x, y, origin, next, dest, hop_len, hop_list)
         print("{}: Message from {} to {} successfully received.".format(id, origin, dest))
     else:
         reachable = updateposition(server, origin, ranges, x, y)
-        #print(reachable)
         reachable_nodes = reachable.split()[2::3]
 
         if no_more_hops(reachable_nodes, hop_list):         #all reachable sensors/base stations is in hop_list
@@ -89,15 +86,14 @@ def datamessage(server, id, ranges, x, y, origin, next, dest, hop_len, hop_list)
             hop_len += 1
             hop_list.append(dest)
             server.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, dest, dest, hop_len, " ".join(hop_list)).encode('utf-8'))
-            print("{}: Message from {} to {} being forwarded through {}.".format(id, origin, dest, id))
+            print("{}: Message from {} to {} being forwarded through {}".format(id, origin, dest, id))
         else:                                               #sensor needs to hop again to next point
             there = where(server, "WHERE {}".format(dest))
-            closest = closest_to_dest(reachable, there)
+            closest = closest_to_dest(reachable, there, hop_list)
             hop_len += 1
             hop_list.append(closest)
-            print("{}: Sent a new message bound for {}.".format(id, dest))
+            print("{}: Message from {} to {} being forwarded through {}".format(id, origin, dest, id))
             server.sendall("DATAMESSAGE {} {} {} {} {}".format(origin, closest, dest, hop_len, " ".join(hop_list)).encode('utf-8'))
-            #print("DATAMESSAGE {} {} {} {} {}".format(source, closest, dest, hop_len, hop_list))
 
 #main control loop for client
 def run_client():
@@ -121,7 +117,6 @@ def run_client():
                 message = server_socket.recv(1024)
                 if message:
                     message = str(message.decode('utf-8')).split()
-                    #print("From Server:", message)
                     if message[0].upper() == "DATAMESSAGE":
                         datamessage(server_socket, id, ranges, x, y, message[1], message[2], message[3], int(message[4]), message[5:])
                     else:
@@ -129,15 +124,12 @@ def run_client():
             elif item == sys.stdin:             #Sensor Client STDIN commands
                 stdin = sys.stdin.readline().strip()
                 message = stdin.split()
-                #print("STDIN:", message)
                 if len(message) == 3 and message[0].upper() == "MOVE":
                     x,y = move(server_socket, id, int(message[1]), int(message[2]), ranges)
                 elif len(message) == 2 and message[0].upper() == "SENDDATA":
-                    #TODO
                     senddata(server_socket, str(message[1]), id, ranges, x, y)
                 elif len(message) == 2 and message[0].upper() == "WHERE":
                     there = where(server_socket, stdin)
-                    print(there)
                 elif len(message) == 1 and message[0].upper() == "QUIT":
                     quit(server_socket)
                     return
