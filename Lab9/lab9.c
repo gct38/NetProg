@@ -44,9 +44,12 @@ int main(int argc, char* argv[]) {
       sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
       if (sock == -1) continue;
 
-      int opt = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &option_value, &option_len);
-
+      getsockopt(sock, IPPROTO_TCP, SO_RCVBUF, &option_value, &option_len);
       printf("SO_RCVBUF: %d\n", option_value);
+      getsockopt(sock, IPPROTO_TCP, SO_SNDBUF, &option_value, &option_len);
+      printf("SO_SENDBUF: %d\n", option_value);
+
+      // connect(sock, rp->ai_addr, rp->ai_addrlen);
       
       close(sock);
       break;
